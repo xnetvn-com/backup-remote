@@ -1,0 +1,24 @@
+<?php
+// Handles notification anti-spam logic
+namespace App\Notification;
+
+class AlertThrottler {
+    private $interval;
+    private $stateFile;
+    private $state = [];
+    public function __construct($config) {
+        $this->interval = $config['NOTIFY_INTERVAL_MINUTES'] ?? 180;
+        $this->stateFile = sys_get_temp_dir().'/backup_notify_state.json';
+        if (file_exists($this->stateFile)) {
+            $this->state = json_decode(file_get_contents($this->stateFile), true) ?: [];
+        }
+    }
+    public function canSend($channel) {
+        $last = $this->state[$channel] ?? 0;
+        return (time() - $last) > $this->interval * 60;
+    }
+    public function markSent($channel) {
+        $this->state[$channel] = time();
+        file_put_contents($this->stateFile, json_encode($this->state));
+    }
+}
