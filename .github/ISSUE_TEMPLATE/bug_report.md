@@ -5,65 +5,65 @@
 #
 # Bug report template
 ---
-name: "Báo cáo lỗi (Bug Report)"
-description: "Báo cáo lỗi, sự cố hoặc hành vi không đúng của hệ thống"
-title: "[BUG] <mô tả ngắn gọn>"
+name: "Bug Report"
+description: "Report a bug, issue, or unexpected behavior in the system"
+title: "[BUG] <short description>"
 labels: [bug]
 assignees: [xnetvn-admin]
 body:
   - type: markdown
     attributes:
       value: |
-        Vui lòng điền đầy đủ thông tin để giúp chúng tôi xử lý nhanh nhất.
+        Please fill in all required information to help us process your report quickly.
   - type: input
     id: summary
     attributes:
-      label: Tóm tắt lỗi
-      description: Mô tả ngắn gọn về lỗi gặp phải
+      label: Bug Summary
+      description: Briefly describe the encountered bug
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Các bước tái hiện
-      description: Mô tả chi tiết các bước để tái hiện lỗi
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the bug
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Kết quả mong đợi
-      description: Hệ thống nên hoạt động như thế nào?
+      label: Expected Result
+      description: What should the system do?
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Kết quả thực tế
-      description: Hệ thống thực tế đã làm gì?
+      label: Actual Result
+      description: What did the system actually do?
     validations:
       required: true
   - type: input
     id: env
     attributes:
-      label: Môi trường
+      label: Environment
       description: OS, PHP version, browser, ...
     validations:
       required: false
   - type: textarea
     id: logs
     attributes:
-      label: Log, ảnh chụp màn hình
-      description: Đính kèm log hoặc ảnh minh họa nếu có
+      label: Logs or Screenshots
+      description: Attach logs or screenshots if available
     validations:
       required: false
   - type: dropdown
     id: priority
     attributes:
-      label: Mức độ ưu tiên
+      label: Priority Level
       options:
-        - Thấp
-        - Trung bình
-        - Cao
+        - Low
+        - Medium
+        - High
     validations:
       required: true

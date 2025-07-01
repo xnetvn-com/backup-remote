@@ -5,51 +5,51 @@
 #
 # Feature request template
 ---
-name: "Yêu cầu tính năng (Feature Request)"
-description: "Đề xuất tính năng mới hoặc cải tiến cho hệ thống"
-title: "[FEATURE] <mô tả ngắn gọn>"
+name: "Feature Request"
+description: "Propose a new feature or improvement for the system"
+title: "[FEATURE] <short description>"
 labels: [enhancement]
 assignees: [xnetvn-admin]
 body:
   - type: markdown
     attributes:
       value: |
-        Vui lòng mô tả rõ nhu cầu và giá trị của tính năng đề xuất.
+        Please describe clearly the need and value of the proposed feature.
   - type: input
     id: summary
     attributes:
-      label: Tóm tắt tính năng
-      description: Mô tả ngắn gọn về tính năng mong muốn
+      label: Feature Summary
+      description: Briefly describe the desired feature
     validations:
       required: true
   - type: textarea
     id: motivation
     attributes:
-      label: Động lực/giá trị
-      description: Tại sao cần tính năng này? Giá trị mang lại?
+      label: Motivation/Value
+      description: Why is this feature needed? What value does it bring?
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Đề xuất giải pháp
-      description: Đề xuất cách thực hiện hoặc ý tưởng cụ thể
+      label: Proposed Solution
+      description: Suggest a specific implementation or idea
     validations:
       required: false
   - type: input
     id: env
     attributes:
-      label: Môi trường liên quan
-      description: OS, PHP version, ... (nếu liên quan)
+      label: Related Environment
+      description: OS, PHP version, ... (if relevant)
     validations:
       required: false
   - type: dropdown
     id: priority
     attributes:
-      label: Mức độ ưu tiên
+      label: Priority Level
       options:
-        - Thấp
-        - Trung bình
-        - Cao
+        - Low
+        - Medium
+        - High
     validations:
       required: true

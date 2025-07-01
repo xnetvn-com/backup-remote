@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+
 // Email notification channel
 namespace App\Notification\Channels;
 

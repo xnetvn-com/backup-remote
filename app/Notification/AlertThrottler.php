@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+
 // Handles notification anti-spam logic
 namespace App\Notification;
 

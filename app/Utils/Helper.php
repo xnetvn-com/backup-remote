@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+
 namespace App\Utils;
 
 class Helper

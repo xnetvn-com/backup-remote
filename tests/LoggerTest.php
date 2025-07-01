@@ -12,7 +12,7 @@ class LoggerTest extends TestCase
 {
     public function test_should_log_info_message()
     {
-        // Gọi hàm log, không có exception là pass (Monolog sẽ ghi file)
+        // Call the log function, test passes if no exception is thrown (Monolog will write to file)
         $this->expectNotToPerformAssertions();
         Logger::info('Test info');
     }

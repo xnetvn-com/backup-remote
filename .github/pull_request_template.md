@@ -5,16 +5,16 @@
 #
 # Pull Request Template - xNetVN Inc.
 
-## Mô tả thay đổi
-<!-- Tóm tắt thay đổi, lý do, liên kết Issue -->
+## Change Description
+<!-- Summarize the changes, reasons, and link to related Issue -->
 
 ## Checklist
-- [ ] Đã kiểm tra code style, lint, test pass
-- [ ] Đã cập nhật/chỉnh sửa tài liệu liên quan
-- [ ] Không commit secret, file build, log
-- [ ] Đã kiểm tra bảo mật (SAST, quét secret, dependency)
+- [ ] Code style, lint, and tests have been checked and passed
+- [ ] Related documentation has been updated/modified
+- [ ] No secrets, build files, or logs are committed
+- [ ] Security checks (SAST, secret scan, dependency scan) have been performed
 
-## Ảnh chụp màn hình (nếu có)
+## Screenshots (if any)
 
-## Liên hệ
+## Contact
 - Email: license@xnetvn.net
