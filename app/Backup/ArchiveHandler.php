@@ -46,6 +46,7 @@ class ArchiveHandler
      * @return string|null The path to the created archive, or null on failure/dry-run.
      * @throws \Exception
      */
+
     public function create(string $username, string $userPath, bool $isDryRun): ?string
     {
         $tempDir = $this->config['local']['temp_dir'];

@@ -34,6 +34,7 @@ class StorageFactory
      * @param array $config
      * @return Filesystem|null
      */
+
     public static function create(string $type, array $config): ?Filesystem
     {
         switch ($type) {

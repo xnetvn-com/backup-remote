@@ -22,6 +22,7 @@ class Helper
     /**
      * Formats size from bytes to KB/MB/GB.
      */
+
     public static function formatSize($bytes): string
     {
         if ($bytes >= 1073741824) {
@@ -39,6 +40,7 @@ class Helper
     /**
      * Checks if the current time is within the allowed backup window.
      */
+
     public static function isAllowedTime($start = '01:00', $end = '06:00'): bool
     {
         $now = date('H:i');
@@ -48,6 +50,7 @@ class Helper
     /**
      * Extracts username from backup filename (format: user.YYYY-MM-DD_HH-MM-SS.ext)
      */
+
     public static function extractUser($filename): ?string
     {
         if (preg_match('/^([a-zA-Z0-9_.-]+)\.\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\./', $filename, $m)) {
@@ -63,6 +66,7 @@ class Helper
      * @param mixed|null $default The default value to return if the key is not found.
      * @return mixed The value of the environment variable or the default value.
      */
+
     public static function env(string $key, $default = null)
     {
         $value = $_ENV[$key] ?? false;
@@ -92,6 +96,7 @@ class Helper
     /**
      * Creates a unique archive name.
      */
+
     public static function createArchiveName($prefix = 'backup', $suffix = 'zip'): string
     {
         $date = date('Y-m-d_H-i-s');

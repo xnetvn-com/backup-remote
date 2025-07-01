@@ -30,6 +30,7 @@ use Throwable;
  * Main coordinator for the backup process.
  * Manages finding users, creating archives, uploading, and rotating backups.
  */
+
 class BackupManager
 {
     private array $config;
@@ -50,6 +51,7 @@ class BackupManager
      *
      * @param bool $isDryRun If true, simulates the process without actual file operations.
      */
+
     public function run(bool $isDryRun = false): void
     {
         $usersToBackup = $this->localFinder->findHestiaUsers();

@@ -27,6 +27,7 @@ use Throwable;
 /**
  * Manages sending notifications through various channels.
  */
+
 class NotificationManager
 {
     private array $config;
@@ -46,6 +47,7 @@ class NotificationManager
     /**
      * Registers notification channels based on the configuration.
      */
+
     private function registerChannels(): void
     {
         if (!empty($this->config['notification']['channels'])) {
@@ -73,6 +75,7 @@ class NotificationManager
      *
      * @param string $message The main message content.
      */
+
     public function sendSuccess(string $message): void
     {
         $this->send('success', 'Backup Successful', $message);
@@ -84,6 +87,7 @@ class NotificationManager
      * @param string $message The main message content.
      * @param string|null $details Optional details about the failure.
      */
+
     public function sendFailure(string $message, ?string $details = null): void
     {
         $this->send('error', 'Backup Failed', $message, $details);
@@ -95,6 +99,7 @@ class NotificationManager
      * @param string $subject The subject of the alert.
      * @param string|null $details Optional details for the alert.
      */
+
     public function sendAlert(string $subject, ?string $details = null): void
     {
         $channel = 'alert';
@@ -114,6 +119,7 @@ class NotificationManager
      * @param string $message The main message content.
      * @param string|null $details Optional extended details.
      */
+
     private function send(string $level, string $subject, string $message, ?string $details = null): void
     {
         $this->logger->log($level, $message, ['subject' => $subject, 'details' => $details]);

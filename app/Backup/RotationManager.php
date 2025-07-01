@@ -27,6 +27,7 @@ use Throwable;
 /**
  * Manages the rotation of old backups based on retention policies.
  */
+
 class RotationManager
 {
     private array $config;
@@ -45,6 +46,7 @@ class RotationManager
      *
      * @param bool $isDryRun If true, only lists files that would be deleted.
      */
+
     public function run(bool $isDryRun): void
     {
         $policies = $this->config['rotation']['policies'];

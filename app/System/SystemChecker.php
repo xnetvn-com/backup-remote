@@ -24,6 +24,7 @@ use Psr\Log\LoggerInterface;
 /**
  * Performs pre-flight checks to ensure the system is ready for backup.
  */
+
 class SystemChecker
 {
     private array $config;
