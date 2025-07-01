@@ -60,7 +60,7 @@ class BackupManager
 
         $this->logger->info('Found users to backup: ' . implode(', ', array_keys($usersToBackup)));
 
-        $storage = StorageFactory::create($this->config, $this->logger);
+        $storage = StorageFactory::create($this->config['remote']['driver'], $this->config, $this->logger);
         $archiveHandler = new ArchiveHandler($this->config, $this->logger);
 
         foreach ($usersToBackup as $username => $userPath) {

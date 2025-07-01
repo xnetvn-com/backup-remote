@@ -22,7 +22,7 @@ use App\Utils\Logger;
 use App\Utils\Helper;
 use Throwable;
 use Psr\Log\LoggerInterface;
-use UnifiedArchive\UnifiedArchive;
+use wapmorgan\UnifiedArchive\UnifiedArchive;
 
 class ArchiveHandler
 {
@@ -58,10 +58,20 @@ class ArchiveHandler
 
         try {
             $this->logger->debug("Creating archive...");
-            $archive = new UnifiedArchive($archivePath, $this->config['archive']['password']);
-            $archive->addPath($userPath, null, $this->config['archive']['exclude'] ?? []);
-            $this->logger->info("Archive for {$username} created successfully.");
-            return $archivePath;
+            $exclude = $this->config['archive']['exclude'] ?? [];
+            $result = UnifiedArchive::archiveDirectory(
+                $userPath,
+                $archivePath,
+                'tar.gz',
+                $exclude
+            );
+            if ($result === true) {
+                $this->logger->info("Archive for {$username} created successfully.");
+                // TODO: Implement encryption if needed, e.g., using openssl_encrypt or system call
+                return $archivePath;
+            } else {
+                throw new \Exception("UnifiedArchive failed: " . print_r($result, true));
+            }
         } catch (Throwable $e) {
             throw new \Exception("Failed to create archive for {$username}: " . $e->getMessage(), 0, $e);
         }
