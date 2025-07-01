@@ -26,14 +26,16 @@ use Aws\S3\S3Client;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Psr\Log\LoggerInterface;
 
-class StorageFactory {
+class StorageFactory
+{
     /**
      * Creates a Filesystem instance for a specific storage type.
      * @param string $type s3|b2|ftp|local
      * @param array $config
      * @return Filesystem|null
      */
-    public static function create(string $type, array $config): ?Filesystem {
+    public static function create(string $type, array $config): ?Filesystem
+    {
         switch ($type) {
             case 's3':
                 $client = new S3Client([

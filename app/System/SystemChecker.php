@@ -39,20 +39,22 @@ class SystemChecker
     {
         $this->logger->info('Running system checks...');
 
-        if (!empty($this->config['performance']['allowed_start_time']) && !$this->checkAllowedTime(
-            $this->config['performance']['allowed_start_time'],
-            $this->config['performance']['allowed_end_time']
-        )) {
+        if (!empty($this->config['performance']['allowed_start_time']) &&
+            !$this->checkAllowedTime(
+                $this->config['performance']['allowed_start_time'],
+                $this->config['performance']['allowed_end_time']
+            )
+        ) {
             throw new \Exception("Backup is not allowed at this time as it is outside the configured backup window.");
         }
 
-        if (!$this->checkCpuLoad((float)$this->config['performance']['max_cpu_load'])) {
+        if (!$this->checkCpuLoad((float) $this->config['performance']['max_cpu_load'])) {
             throw new \Exception("CPU load is too high for backup operation.");
         }
 
         if (!$this->checkDiskFree(
             $this->config['local']['temp_dir'],
-            (int)$this->config['performance']['min_disk_free_percent']
+            (int) $this->config['performance']['min_disk_free_percent']
         )) {
             throw new \Exception("Not enough free disk space in the temporary directory.");
         }

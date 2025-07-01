@@ -78,8 +78,9 @@ class LocalFinder
      * @param string $user
      * @return array
      */
-    public static function findUserBackups($dir, $user): array {
-        $files = glob(rtrim($dir,'/').'/'.$user.'.*.{tar,zip,gz,zst}', GLOB_BRACE);
+    public static function findUserBackups($dir, $user): array
+    {
+        $files = glob(rtrim($dir, '/') . '/' . $user . '.*.{tar,zip,gz,zst}', GLOB_BRACE);
         return $files ?: [];
     }
 
@@ -88,8 +89,9 @@ class LocalFinder
      * @param string $dir
      * @return array
      */
-    public static function findAllBackups($dir): array {
-        $files = glob(rtrim($dir,'/').'/*.{tar,zip,gz,zst}', GLOB_BRACE);
+    public static function findAllBackups($dir): array
+    {
+        $files = glob(rtrim($dir, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
         return $files ?: [];
     }
 }

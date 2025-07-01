@@ -15,24 +15,32 @@
  * limitations under the License.
  */
 
-// Contains general utility functions
 namespace App\Utils;
 
-class Helper {
+class Helper
+{
     /**
      * Formats size from bytes to KB/MB/GB.
      */
-    public static function formatSize($bytes): string {
-        if ($bytes >= 1073741824) return round($bytes/1073741824,2).' GB';
-        if ($bytes >= 1048576) return round($bytes/1048576,2).' MB';
-        if ($bytes >= 1024) return round($bytes/1024,2).' KB';
-        return $bytes.' B';
+    public static function formatSize($bytes): string
+    {
+        if ($bytes >= 1073741824) {
+            return round($bytes / 1073741824, 2) . ' GB';
+        }
+        if ($bytes >= 1048576) {
+            return round($bytes / 1048576, 2) . ' MB';
+        }
+        if ($bytes >= 1024) {
+            return round($bytes / 1024, 2) . ' KB';
+        }
+        return $bytes . ' B';
     }
 
     /**
      * Checks if the current time is within the allowed backup window.
      */
-    public static function isAllowedTime($start = '01:00', $end = '06:00'): bool {
+    public static function isAllowedTime($start = '01:00', $end = '06:00'): bool
+    {
         $now = date('H:i');
         return ($now >= $start && $now <= $end);
     }
@@ -40,7 +48,8 @@ class Helper {
     /**
      * Extracts username from backup filename (format: user.YYYY-MM-DD_HH-MM-SS.ext)
      */
-    public static function extractUser($filename): ?string {
+    public static function extractUser($filename): ?string
+    {
         if (preg_match('/^([a-zA-Z0-9_.-]+)\.\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\./', $filename, $m)) {
             return $m[1];
         }
@@ -83,7 +92,8 @@ class Helper {
     /**
      * Creates a unique archive name.
      */
-    public static function createArchiveName($prefix = 'backup', $suffix = 'zip'): string {
+    public static function createArchiveName($prefix = 'backup', $suffix = 'zip'): string
+    {
         $date = date('Y-m-d_H-i-s');
         return "{$prefix}.{$date}.{$suffix}";
     }

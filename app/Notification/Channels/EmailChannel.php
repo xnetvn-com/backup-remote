@@ -22,11 +22,22 @@ namespace App\Notification\Channels;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-class EmailChannel {
+class EmailChannel
+{
     private $config;
-    public function __construct($config) { $this->config = $config; }
-    public function getName() { return 'email'; }
-    public function send($level, $subject, $message, $details = null) {
+
+    public function __construct($config)
+    {
+        $this->config = $config;
+    }
+
+    public function getName()
+    {
+        return 'email';
+    }
+
+    public function send($level, $subject, $message, $details = null)
+    {
         $mail = new PHPMailer(true);
         try {
             $mail->isSMTP();

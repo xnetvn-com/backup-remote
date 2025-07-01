@@ -20,14 +20,27 @@ namespace App\Notification\Channels;
 
 use GuzzleHttp\Client;
 
-class TelegramChannel {
+class TelegramChannel
+{
     private $config;
-    public function __construct($config) { $this->config = $config; }
-    public function getName() { return 'telegram'; }
-    public function send($level, $subject, $message, $details = null) {
+
+    public function __construct($config)
+    {
+        $this->config = $config;
+    }
+
+    public function getName()
+    {
+        return 'telegram';
+    }
+
+    public function send($level, $subject, $message, $details = null)
+    {
         $token = $this->config['TELEGRAM_BOT_TOKEN'] ?? null;
         $chatId = $this->config['TELEGRAM_CHAT_ID'] ?? null;
-        if (!$token || !$chatId) return;
+        if (!$token || !$chatId) {
+            return;
+        }
 
         $text = "<b>$subject</b>\n\n" . $message . ($details ? "\n\n" . $details : '');
         $client = new Client();

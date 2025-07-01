@@ -16,6 +16,7 @@
  */
 
 // Handles backup compression and encryption
+
 namespace App\Backup;
 
 use App\Utils\Logger;
