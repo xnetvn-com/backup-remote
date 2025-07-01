@@ -89,7 +89,10 @@ class SystemChecker
             return false; // Cannot determine, fail safely
         }
         $percent = ($free / $total) * 100;
-        $this->logger->debug("Checking disk space for '{$path}'. Current free: " . round($percent, 2) . "%. Required: {$minPercent}%.");
+        $msg = "Checking disk space for '{$path}'. Current free: "
+            . round($percent, 2)
+            . "%. Required: {$minPercent}%.";
+        $this->logger->debug($msg);
         return $percent >= $minPercent;
     }
 }
