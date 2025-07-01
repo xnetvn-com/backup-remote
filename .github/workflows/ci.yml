@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Run truffleHog via Docker
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" trufflesecurity/trufflehog:latest filesystem --fail --no-update --json --exclude /src/libs/vendor /src
+          docker run --rm -v "${{ github.workspace }}:/src" trufflesecurity/trufflehog:latest filesystem --fail --no-update --json /src
 
   dependency-scan:
     name: Dependency Vulnerability Scan (Snyk)
@@ -92,14 +92,18 @@ jobs:
       - name: Check for composer.lock or composer.json
         id: check_composer
         run: |
-          if [ -f "libs/composer.lock" ] || [ -f "libs/composer.json" ]; then
-            echo "::set-output name=found::true"
+          if [ -f "libs/composer.lock" ]; then
+            echo "::set-output name=manifest::libs/composer.lock"
+          elif [ -f "libs/composer.json" ]; then
+            echo "::set-output name=manifest::libs/composer.json"
           else
-            echo "::set-output name=found::false"
+            echo "::set-output name=manifest::"
           fi
       - name: Run Snyk to check for vulnerabilities
-        if: steps.check_composer.outputs.found == 'true'
+        if: steps.check_composer.outputs.manifest != ''
         uses: snyk/actions/php@master
+        with:
+          args: ${{ steps.check_composer.outputs.manifest }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
