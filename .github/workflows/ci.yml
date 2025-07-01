@@ -78,10 +78,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Run truffleHog OSS
-        uses: trufflesecurity/trufflehog@v3
-        with:
-          scanArguments: --fail --no-update --json .
+      - name: Run truffleHog via Docker
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" trufflesecurity/trufflehog:latest filesystem --fail --no-update --json /src
 
   dependency-scan:
     name: Dependency Vulnerability Scan (Snyk)
