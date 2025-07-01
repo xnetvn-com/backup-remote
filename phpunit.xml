@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright (c) 2025 xNetVN Inc.
+    Website: https://xnetvn.com/
+    License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+    Contact: license@xnetvn.net
+-->
+<phpunit bootstrap="libs/vendor/autoload.php"
+         colors="true"
+         verbose="true"
+         stopOnFailure="false"
+         stopOnError="false">
+    <testsuites>
+        <testsuite name="Application Test Suite">
+            <directory>./tests</directory>
+        </testsuite>
+    </testsuites>
+    <coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">./app</directory>
+        </include>
+    </coverage>
+</phpunit>

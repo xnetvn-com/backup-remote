@@ -1,0 +1,97 @@
+# Copyright (c) 2025 xNetVN Inc.
+# Website: https://xnetvn.com/
+# License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+# Contact: license@xnetvn.net
+#
+# GitHub Actions CI/CD workflow for PHP project - xNetVN Inc.
+#
+# - Tự động kiểm thử, lint, coverage, SAST, quét secret, kiểm tra dependency.
+# - Đảm bảo tuân thủ tiêu chuẩn DevSecOps, bảo mật, chất lượng code.
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, feature/**, bugfix/**, hotfix/**, release/**]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-test:
+    name: Build, Lint, Test, Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xdebug
+          coverage: xdebug
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --working-dir=libs
+
+      - name: Run PHP Lint
+        run: find app/ -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Run PHP_CodeSniffer
+        run: |
+          composer global require "squizlabs/php_codesniffer=*"
+          ~/.composer/vendor/bin/phpcs --standard=PSR12 app/
+
+      - name: Run PHPUnit (with coverage)
+        run: |
+          php libs/vendor/bin/phpunit --configuration phpunit.xml --coverage-text --coverage-clover=coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  sast:
+    name: Static Application Security Testing (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: php
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  secrets-scan:
+    name: Secret Scanning (truffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run truffleHog OSS
+        uses: trufflesecurity/trufflehog@v3
+        with:
+          scanArguments: --fail --no-update --json .
+
+  dependency-scan:
+    name: Dependency Vulnerability Scan (Snyk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/php@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+# Dependabot sẽ được cấu hình riêng qua file dependabot.yml

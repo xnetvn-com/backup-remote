@@ -1,0 +1,22 @@
+# Copyright (c) 2025 xNetVN Inc.
+# Website: https://xnetvn.com/
+# License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+# Contact: license@xnetvn.net
+#
+# Dependabot configuration for PHP project - xNetVN Inc.
+# Tự động quét và cập nhật dependency, cảnh báo lỗ hổng bảo mật.
+
+version: 2
+updates:
+  - package-ecosystem: "composer"
+    directory: "/libs"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    reviewers:
+      - "xnetvn-admin"
+    labels:
+      - "dependencies"
+      - "security"

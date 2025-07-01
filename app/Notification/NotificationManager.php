@@ -1,4 +1,19 @@
 <?php
+/**
+ * Copyright (c) 2025 xNetVN Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 declare(strict_types=1);
 
@@ -23,8 +38,8 @@ class NotificationManager
     {
         $this->config = $config;
         $this->logger = $logger;
-        $this->throttler = new AlertThrottler($config['notification']['alert_throttle_seconds'] ?? 3600);
-
+        $throttleConfig = $config['notification']['throttle'] ?? [];
+        $this->throttler = new AlertThrottler($throttleConfig);
         $this->registerChannels();
     }
 
@@ -82,9 +97,10 @@ class NotificationManager
      */
     public function sendAlert(string $subject, ?string $details = null): void
     {
-        if ($this->throttler->canSend()) {
+        $channel = 'alert';
+        if ($this->throttler->canSend($channel)) {
             $this->send('warning', $subject, $details ?? 'No details provided.');
-            $this->throttler->recordSend();
+            $this->throttler->markSent($channel);
         } else {
             $this->logger->info("Alert throttling is active. Skipping notification for: {$subject}");
         }
@@ -100,22 +116,19 @@ class NotificationManager
      */
     private function send(string $level, string $subject, string $message, ?string $details = null): void
     {
-        // First, log the message internally regardless of notification sending
         $this->logger->log($level, $message, ['subject' => $subject, 'details' => $details]);
-
-        // Then, iterate over configured channels and try to send notifications
         foreach ($this->channels as $channel) {
             $channelIdentifier = get_class($channel);
             if ($this->throttler->canSend($channelIdentifier)) {
                 try {
                     $this->logger->debug("Attempting to send notification via {$channelIdentifier}");
-                    $channel->send($level, $message);
+                    $channel->send($level, $subject, $message, $details);
                     $this->throttler->markSent($channelIdentifier);
                     $this->logger->info("Notification sent successfully via {$channelIdentifier}");
                 } catch (Throwable $e) {
                     $this->logger->error("Failed to send notification via {$channelIdentifier}", [
                         'exception' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(), // More context for debugging
+                        'trace' => $e->getTraceAsString(),
                     ]);
                 }
             } else {
