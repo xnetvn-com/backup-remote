@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright (c) 2025 xNetVN Inc.
  * Website: https://xnetvn.com/
@@ -31,7 +32,8 @@ class SystemChecker
     {
         $this->logger->info('Running system checks...');
 
-        if (!empty($this->config['performance']['allowed_start_time']) &&
+        if (
+            !empty($this->config['performance']['allowed_start_time']) &&
             !$this->checkAllowedTime(
                 $this->config['performance']['allowed_start_time'],
                 $this->config['performance']['allowed_end_time']
@@ -44,10 +46,12 @@ class SystemChecker
             throw new \Exception("CPU load is too high for backup operation.");
         }
 
-        if (!$this->checkDiskFree(
-            $this->config['local']['temp_dir'],
-            (int) $this->config['performance']['min_disk_free_percent']
-        )) {
+        if (
+            !$this->checkDiskFree(
+                $this->config['local']['temp_dir'],
+                (int) $this->config['performance']['min_disk_free_percent']
+            )
+        ) {
             throw new \Exception("Not enough free disk space in the temporary directory.");
         }
 

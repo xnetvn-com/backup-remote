@@ -17,7 +17,6 @@
         <MissingParamType errorLevel="info"/>
         <PossiblyUnusedMethod errorLevel="info"/>
         <PossiblyUnusedProperty errorLevel="info"/>
-        <PossiblyUnusedVariable errorLevel="info"/>
     </issueHandlers>
     <plugins>
         <!-- Add Psalm plugins here if needed -->

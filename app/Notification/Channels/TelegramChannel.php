@@ -1,11 +1,11 @@
 <?php
+
 /**
  * Copyright (c) 2025 xNetVN Inc.
  * Website: https://xnetvn.com/
  * License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
  * Contact: license@xnetvn.net
  */
-
 
 // Telegram notification channel
 namespace App\Notification\Channels;

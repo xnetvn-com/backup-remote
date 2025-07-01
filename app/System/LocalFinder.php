@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright (c) 2025 xNetVN Inc.
  *
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 
 // Finds local backup files
 namespace App\System;
