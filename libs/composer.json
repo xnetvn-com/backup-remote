@@ -11,11 +11,15 @@
         "guzzlehttp/guzzle": "^7.0",
         "vlucas/phpdotenv": "^5.0",
         "phpseclib/phpseclib": "^3.0",
-        "wapmorgan/unified-archive": "^1.0"
+        "wapmorgan/unified-archive": "^1.0",
+        "phpmailer/phpmailer": "^6.10"
     },
     "autoload": {
         "psr-4": {
             "App\\": "../app/"
         }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
     }
 }
