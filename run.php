@@ -48,9 +48,19 @@ if ($isDryRun) {
 }
 
 // --- Main Execution ---
+$lockFile = __DIR__ . '/.backup.lock';
+$lockAcquired = false;
 try {
     // 1. Lock Process
-    // ... (Implementation of a lock file to prevent concurrent runs)
+    if (file_exists($lockFile)) {
+        $logger->error("Another backup process is already running. Exiting.");
+        exit(2);
+    }
+    if (file_put_contents($lockFile, getmypid() ?: "unknown") === false) {
+        $logger->error("Failed to create lock file. Exiting.");
+        exit(3);
+    }
+    $lockAcquired = true;
 
     // 2. System Checks
     $logger->info("Performing system checks...");
@@ -67,14 +77,18 @@ try {
     if (!$isDryRun) {
         $notificationManager->sendSuccess("Backup process completed successfully.");
     }
+    exit(0);
 } catch (Exception $e) {
     $errorMessage = 'An error occurred: ' . $e->getMessage();
     $logger->error($errorMessage, ['exception' => $e]);
     if (!$isDryRun) {
         $notificationManager->sendFailure($errorMessage);
     }
+    exit(1);
 } finally {
     // 5. Unlock Process
-    // ... (Remove the lock file)
+    if ($lockAcquired && file_exists($lockFile)) {
+        unlink($lockFile);
+    }
     $logger->info("Backup script finished.");
 }

@@ -21,7 +21,6 @@ class ArchiveHandler
 {
     private array $config;
     private LoggerInterface $logger;
-    private string $tempDir;
 
     public function __construct(array $config, LoggerInterface $logger)
     {
@@ -38,7 +37,6 @@ class ArchiveHandler
      * @return string|null The path to the created archive, or null on failure/dry-run.
      * @throws \Exception
      */
-
     public function create(string $username, string $userPath, bool $isDryRun): ?string
     {
         $tempDir = $this->config['local']['temp_dir'];
@@ -67,6 +65,7 @@ class ArchiveHandler
                 throw new \Exception("UnifiedArchive failed: " . print_r($result, true));
             }
         } catch (Throwable $e) {
+            $this->logger->error("Failed to create archive for {$username}: " . $e->getMessage(), ['exception' => $e]);
             throw new \Exception("Failed to create archive for {$username}: " . $e->getMessage(), 0, $e);
         }
     }

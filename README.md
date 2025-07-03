@@ -29,7 +29,7 @@ A robust PHP script designed to automate the backup of Hestia Control Panel user
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/hestia-remote-backup.git
+    git clone https://github.com/xnetvn-com/hestia-remote-backup.git
     cd hestia-remote-backup
     ```
 

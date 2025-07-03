@@ -15,3 +15,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+namespace App\Utils;
+
+use Monolog\Logger as MonoLogger;
+use Monolog\Handler\StreamHandler;
+use Monolog\Formatter\LineFormatter;
+use Psr\Log\LoggerInterface;
+
+class Logger
+{
+    private static ?LoggerInterface $instance = null;
+
+    public static function getLogger(): LoggerInterface
+    {
+        if (self::$instance === null) {
+            $logFile = __DIR__ . '/../../storage/logs/app.log';
+            $stream = new StreamHandler($logFile, MonoLogger::DEBUG);
+            $formatter = new LineFormatter(null, null, true, true);
+            $stream->setFormatter($formatter);
+            $logger = new MonoLogger('app');
+            $logger->pushHandler($stream);
+            self::$instance = $logger;
+        }
+        return self::$instance;
+    }
+}
