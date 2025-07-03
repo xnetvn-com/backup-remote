@@ -1,6 +1,6 @@
 {
-    "name": "yourname/backup-remote",
-    "description": "Backup HestiaCP to S3/Backblaze/FTP, encrypted, OOP, optimized for low resource server.",
+    "name": "xnetvn-com/php-backup-remote",
+    "description": "HestiaCP Remote Backup Tool: encrypted, compressed backups to S3/Backblaze/FTP with rotation and notifications.",
     "type": "project",
     "require": {
         "php": ">=8.2",

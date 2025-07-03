@@ -55,7 +55,7 @@ if ($isDryRun) {
 }
 
 // --- Main Execution ---
-// Sử dụng Helper::getTmpDir() để xác định thư mục tạm
+// Use Helper::getTmpDir() to determine the temporary directory
 $tmpDir = App\Utils\Helper::getTmpDir();
 $lockFile = $tmpDir . '/.backup.lock';
 $lockAcquired = false;

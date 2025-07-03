@@ -1,254 +1,182 @@
 # HestiaCP Remote Backup Tool
 
-A robust PHP script designed to automate the backup of Hestia Control Panel user data to various remote storage providers. It's built with modern PHP practices, focusing on reliability, efficiency, and ease of use, especially on servers with limited resources.
+A robust PHP command-line utility to automate the backup of Hestia Control Panel user data to various remote storage providers. It supports encryption, compression, retention policies, and multi-channel notifications, optimized for servers with limited resources.
 
 ## Features
 
-- **Multiple Storage Backends**: Seamlessly upload backups to any S3-compatible object storage (like AWS S3, Backblaze B2, DigitalOcean Spaces) or traditional FTP servers, thanks to [Flysystem](https://flysystem.thephpleague.com/).
-- **Strong Encryption**: Secure your backups with AES-256-CBC encryption before they leave your server.
-- **Compression**: Backups are compressed into `.tar.gz` format to save storage space.
-- **Smart Backup Rotation**: Automatically manages backup history by keeping a configurable number of daily, weekly, and monthly backups, pruning old archives to free up space.
-- **Resource-Aware**: Includes pre-flight checks for CPU load and available disk space to prevent backups from overwhelming your server.
-- **Detailed Logging**: Comprehensive logging using [Monolog](https://github.com/Seldaek/monolog) provides clear insight into every step of the process. Logs are stored in `storage/logs/app.log`.
-- **Multi-Channel Notifications**: Get notified about backup success or failure through various channels like Email and Telegram.
-- **Flexible Configuration**: All settings are managed through a simple `.env` file.
-- **Dry-Run Mode**: Safely test your configuration and the backup logic without performing any actual file operations or uploads.
-- **Professional Codebase**: Written in modern PHP 8.2+, follows PSR-12 coding standards, and is fully object-oriented.
+- **Multiple Storage Backends**: Upload encrypted backups to any S3-compatible service (AWS S3, Backblaze B2, DigitalOcean Spaces) or traditional FTP servers via [Flysystem](https://flysystem.thephpleague.com/).
+- **Strong Encryption**: AES-256-CBC encryption (via OpenSSL) or GPG encryption before upload.
+- **Flexible Compression**: Support for gzip, zstd, bzip2, xz, zip, 7z formats.
+- **Smart Rotation**: Retention policies to keep a configured number of daily, weekly, or custom backups and prune old archives automatically.
+- **Dry-Run Mode**: Safe simulation without creating, uploading, or deleting files.
+- **Detailed Logging**: Structured logs with Monolog stored in `storage/logs/app.log`.
+- **Pre-flight Checks**: CPU load, disk space, and time-window checks to prevent resource exhaustion.
+- **Notifications**: Email and Telegram notifications on success or failure.
+- **PSR-12 & Modern PHP**: Written in PHP 8.2+, fully object-oriented, following best practices.
 
 ## Requirements
 
 - PHP 8.2 or higher
 - Composer
-- The following PHP extensions:
-  - `ctype`
-  - `mbstring`
-  - `openssl`
-  - `ftp` (if using the FTP driver)
+- PHP Extensions: `ctype`, `mbstring`, `openssl`, `ftp` (for FTP driver)
+- CLI Tools for compression/encryption:
+  - gzip (install: `sudo apt install gzip`)
+  - zstd (install: `sudo apt install zstd`)
+  - bzip2 (install: `sudo apt install bzip2`)
+  - xz-utils (install: `sudo apt install xz-utils`)
+  - zip & unzip (install: `sudo apt install zip unzip`)
+  - p7zip-full (install: `sudo apt install p7zip-full`)
+  - gnupg (install: `sudo apt install gnupg`)
 
 ## Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/xnetvn-com/hestia-remote-backup.git
-    cd hestia-remote-backup
-    ```
-
-2.  **Install dependencies:**
-    Make sure you have Composer installed.
-    ```bash
-    composer install --no-dev --optimize-autoloader
-    ```
-
-3.  **Create your environment file:**
-    Copy the example environment file and edit it with your settings.
-    ```bash
-    cp .env.example .env
-    ```
-
-4.  **Configure the application:**
-    Open the `.env` file and fill in your specific details. See the **Configuration** section below for a detailed explanation of all variables.
+```bash
+git clone https://github.com/xnetvn-com/php-backup-remote.git
+cd php-backup-remote
+composer install --no-dev --optimize-autoloader
+``` 
 
 ## Configuration
 
-All configuration is done in the `.env` file.
+Copy the example environment file and edit your settings:
 
-#### General Settings
-| Variable | Description | Default |
-| --- | --- | --- |
-| `APP_NAME` | The name of your application. | "Hestia Backup" |
-| `APP_ENV` | The application environment. | `production` |
-| `APP_DEBUG` | Enable/disable debug mode. **Should be `false` in production.** | `false` |
-| `LOG_LEVEL` | The minimum log level to record. | `info` |
-| `ENCRYPTION_PASSWORD` | **Crucial!** The password used to encrypt your backup files. **Choose a strong, unique password and save it securely.** | `YourSecretPassword` |
+```bash
+cp .env.example .env
+``` 
 
----
+Open `.env` and configure:
 
-#### Backup Directories
-| Variable | Description | Default |
-| --- | --- | --- |
-| `BACKUP_DIRS` | Comma-separated list of absolute paths to backup directories on the server. Supports multiple directories. If not set, defaults to `/backup`. | `/backup` |
+| Variable                  | Description                                                         | Default             |
+|---------------------------|---------------------------------------------------------------------|---------------------|
+| APP_NAME                  | Application name                                                    | "Hestia Backup"    |
+| APP_ENV                   | Environment (`production` or `development`)                         | `production`        |
+| APP_DEBUG                 | Enable debug mode (`true`/`false`)                                  | `false`             |
+| LOG_LEVEL                 | Minimum log level (`debug`, `info`, `warning`, `error`)             | `info`              |
+| ENCRYPTION_PASSWORD       | Password for AES or GPG encryption (choose a strong secret)         | *REQUIRED*          |
+| BACKUP_DIRS               | Comma-separated absolute paths to backup user directories           | `/backup`           |
+| REMOTE_DRIVER             | Storage driver: `s3` or `ftp`                                       | `s3`                |
+| REMOTE_PATH               | Base path or folder in remote storage                               | `backups/`          |
 
-**Example:**
-```
-BACKUP_DIRS=/backup,/mnt/hdd/backup,/srv/data/backups
-```
-- All listed directories must be absolute paths and writable by the application user.
-- The backup process will scan all specified directories for user data to back up.
-- If you only want to back up a single directory, just provide one path (e.g., `/backup`).
+### S3 Driver Settings
 
----
+| Variable                  | Description                                                         |
+|---------------------------|---------------------------------------------------------------------|
+| AWS_ACCESS_KEY_ID         | S3 access key                                                       |
+| AWS_SECRET_ACCESS_KEY     | S3 secret key                                                       |
+| AWS_DEFAULT_REGION        | S3 region                                                           |
+| AWS_BUCKET                | S3 bucket name                                                      |
+| AWS_ENDPOINT              | Custom endpoint (for non-AWS providers)                             |
 
-#### Remote Storage
-Set up the primary remote storage driver.
+### FTP Driver Settings
 
-| Variable | Description |
-| --- | --- |
-| `REMOTE_DRIVER` | The storage driver to use. Supported: `s3`, `ftp`. |
-| `REMOTE_PATH` | The base directory on the remote storage where backups will be stored. |
+| Variable                  | Description                                                         |
+|---------------------------|---------------------------------------------------------------------|
+| FTP_HOST                  | FTP server hostname                                                 |
+| FTP_USERNAME              | FTP username                                                        |
+| FTP_PASSWORD              | FTP password                                                        |
+| FTP_PORT                  | FTP port (default `21`)                                              |
+| FTP_ROOT                  | Base directory on FTP server                                        |
+| FTP_SSL                   | `true` or `false` for FTPS                                          |
+| FTP_PASSIVE               | `true` (passive) or `false` (active)                                 |
 
-**S3 Driver Settings (`REMOTE_DRIVER=s3`)**
-| Variable | Description |
-| --- | --- |
-| `AWS_ACCESS_KEY_ID` | Your S3-compatible access key. |
-| `AWS_SECRET_ACCESS_KEY` | Your S3-compatible secret key. |
-| `AWS_DEFAULT_REGION` | The region of your S3 bucket. |
-| `AWS_BUCKET` | The name of your S3 bucket. |
-| `AWS_ENDPOINT` | The endpoint URL. **Required for non-AWS S3-compatible services** (e.g., Backblaze, DigitalOcean). |
+### Rotation Settings
 
-**FTP Driver Settings (`REMOTE_DRIVER=ftp`)**
-| Variable | Description |
-| --- | --- |
-| `FTP_HOST` | FTP server hostname. |
-| `FTP_USERNAME` | FTP username. |
-| `FTP_PASSWORD` | FTP password. |
-| `FTP_PORT` | FTP port. |
-| `FTP_ROOT` | The root path to use on the FTP server. |
-| `FTP_SSL` | Whether to use a secure FTP connection (FTPS). |
-| `FTP_PASSIVE` | Enable FTP passive mode. `true` (recommended for most environments), `false` for active mode. Default: `true`. |
+| Variable                  | Description                 | Default  |
+|---------------------------|-----------------------------|----------|
+| ROTATION_ENABLED          | Enable automatic rotation   | `true`   |
+| ROTATION_KEEP_LATEST      | Number of recent backups to keep | `7` |
 
----
+### Performance Limits
 
-#### Backup Rotation
-| Variable | Description | Default |
-| --- | --- | --- |
-| `ROTATION_ENABLED` | Set to `true` to enable automatic backup rotation. | `true` |
-| `ROTATION_DAILY` | Number of daily backups to keep. | `7` |
-| `ROTATION_WEEKLY` | Number of weekly backups to keep. | `4` |
-| `ROTATION_MONTHLY` | Number of monthly backups to keep. | `6` |
+| Variable                  | Description                                                       | Default |
+|---------------------------|-------------------------------------------------------------------|----------|
+| ALLOWED_START_TIME        | Earliest allowed backup time (`HH:MM`), empty to disable           | `01:00`  |
+| ALLOWED_END_TIME          | Latest allowed backup time (`HH:MM`), empty to disable            | `05:00`  |
+| MAX_CPU_LOAD              | Max 1-min CPU load average, 0 to disable                           | `2.5`    |
+| MIN_DISK_FREE_PERCENT     | Minimum free disk % in temp dir                                    | `15`     |
+| MEMORY_LIMIT              | PHP memory limit (e.g., `256M`)                                     | `256M`   |
+| TIME_LIMIT                | Max script time in seconds, 0 for unlimited                        | `3600`   |
 
----
+### Notification Settings
 
-#### Performance
-| Variable | Description | Default |
-| --- | --- | --- |
-| `ALLOWED_START_TIME` | The start of the allowed backup window (e.g., '01:00'). Leave empty to disable. | `01:00` |
-| `ALLOWED_END_TIME` | The end of the allowed backup window (e.g., '05:00'). Leave empty to disable. | `05:00` |
-| `MAX_CPU_LOAD` | Aborts if the 1-min CPU load average exceeds this value. `0` to disable. | `2.5` |
-| `MIN_DISK_FREE_PERCENT` | Aborts if free disk space in the temp directory is below this percentage. | `15` |
-| `MEMORY_LIMIT` | PHP memory limit for the script (e.g., '256M'). | `256M` |
-| `TIME_LIMIT` | Maximum script execution time in seconds. `0` for no limit. | `3600` |
+| Variable                  | Description                                                    | Default |
+|---------------------------|----------------------------------------------------------------|----------|
+| NOTIFICATION_ENABLED      | Enable notifications                                          | `true`  |
+| NOTIFICATION_CHANNELS     | Comma-separated: `email`, `telegram`                          | `email` |
+| ALERT_THROTTLE_MINUTES    | Cool-down period between alerts                               | `60`    |
 
----
+#### Email Channel
 
-#### Notifications
-| Variable | Description | Default |
-| --- | --- | --- |
-| `NOTIFICATION_ENABLED` | Set to `true` to enable notifications. | `true` |
-| `NOTIFICATION_CHANNELS` | Comma-separated list of channels to use. Supported: `email`, `telegram`. | `email` |
-| `ALERT_THROTTLE_MINUTES` | Avoids spamming alerts for the same issue by setting a cool-down period. | `60` |
+Configure SMTP settings:
 
-**Email Channel Settings**
-| Variable | Description |
-| --- | --- |
-| `MAIL_MAILER` | `smtp` is recommended. |
-| `MAIL_HOST` | Your SMTP server host. |
-| `MAIL_PORT` | Your SMTP server port. |
-| `MAIL_USERNAME` | Your SMTP username. |
-| `MAIL_PASSWORD` | Your SMTP password. |
-| `MAIL_ENCRYPTION` | `tls` or `ssl`. |
-| `MAIL_FROM_ADDRESS` | The "From" email address. |
-| `MAIL_FROM_NAME` | The "From" name. |
-| `MAIL_TO_ADDRESS` | The recipient's email address. |
-
-**Telegram Channel Settings**
-| Variable | Description |
-| --- | --- |
-| `TELEGRAM_BOT_TOKEN` | Your Telegram Bot's API token. |
-| `TELEGRAM_CHAT_ID` | The target chat/channel ID. |
-
----
-
-### Compression & Encryption
-
-| Variable                   | Description                                                                                 | Default |
-|---------------------------|---------------------------------------------------------------------------------------------|---------|
-| BACKUP_COMPRESSION        | Compression method before upload (`none`, `zstd`, `gzip`, `bzip2`, `xz`, `zip`, `7z`, ...)   | `gzip`  |
-| BACKUP_COMPRESSION_LEVEL  | Compression level for selected method. See below for valid range.                            | `1`     |
-| BACKUP_ENCRYPTION         | Encryption method before upload (`none`, `aes`, `gpg`, ...)                                 | `aes`   |
-
-**Compression Level Ranges:**
-- `gzip`: 1 (fastest, least compression) to 9 (slowest, best compression)
-- `zstd`: 1 (fastest) to 22 (best, slowest; 19+ requires zstd >= 1.3.4)
-- `bzip2`: 1 (fastest) to 9 (best)
-- `xz`: 0 (fastest) to 9 (best)
-- `zip`: 0 (fastest) to 9 (best)
-- `7z`: 1 (fastest) to 9 (best)
-- `none`: ignored
-
-> ⚠️ Nếu giá trị BACKUP_COMPRESSION_LEVEL ngoài phạm vi hợp lệ, hệ thống sẽ tự động ép về giá trị gần nhất, không báo lỗi.
-
-Ví dụ cấu hình:
-```env
-BACKUP_COMPRESSION=zip
-BACKUP_COMPRESSION_LEVEL=9
-BACKUP_ENCRYPTION=aes
+```ini
+MAIL_MAILER=smtp
+MAIL_HOST=
+MAIL_PORT=
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=
+MAIL_FROM_NAME=
+MAIL_TO_ADDRESS=
 ```
 
-### Required CLI Tools for Compression/Encryption
+#### Telegram Channel
 
-To use all supported compression and encryption methods, ensure the following CLI tools are installed on your system:
-
-| Method   | Required CLI Tool | Install Command (Debian/Ubuntu)         |
-|----------|-------------------|-----------------------------------------|
-| gzip     | gzip              | sudo apt install gzip                   |
-| zstd     | zstd              | sudo apt install zstd                   |
-| bzip2    | bzip2             | sudo apt install bzip2                  |
-| xz       | xz-utils          | sudo apt install xz-utils               |
-| zip      | zip, unzip        | sudo apt install zip unzip              |
-| 7z       | p7zip-full        | sudo apt install p7zip-full             |
-| gpg      | gpg               | sudo apt install gnupg                  |
-
-- All compression/encryption is performed via streaming for large file support.
-- If a CLI tool is missing, the corresponding method will fail and be logged as an error.
-- For best compatibility, use recent versions of each tool (zstd >= 1.5.0 recommended for password support).
-
----
+```ini
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+```
 
 ## Usage
 
-### Running Manually
+### Run Backup
 
-You can execute the script directly from the command line.
+- **Real backup:**
+  ```bash
+  php run.php
+  ```
+- **Dry-run (simulate):**
+  ```bash
+  php run.php --dry-run
+  ```
 
--   **Perform a real backup:**
-    ```bash
-    php /path/to/your/project/run.php
-    ```
+### Restore Backup
 
--   **Perform a dry run (recommended for testing):**
-    A dry run will simulate the entire process—finding users, creating archives, and planning rotations—without actually creating, encrypting, uploading, or deleting any files. All actions will be logged.
-    ```bash
-    php /path/to/your/project/run.php --dry-run
-    ```
+```bash
+php download.php --user=<username> --version=<YYYY-MM-DD_HH-MM-SS> [--remote=<driver>] [--outdir=<path>]
+```
 
-### Automating with a Cron Job
+### Automate with Cron
 
-To run the backup automatically every night, set up a cron job.
-
-1.  Open the crontab editor:
-    ```bash
-    crontab -e
-    ```
-
-2.  Add the following line to run the backup script every day at 2:30 AM. Adjust the time and path as needed.
-    ```cron
-    30 2 * * * /usr/bin/php /path/to/your/project/run.php > /dev/null 2>&1
-    ```
-    This command redirects all output to `/dev/null` to prevent cron from sending unnecessary emails. The script's own logging will capture all important information in `storage/logs/app.log`.
+```cron
+30 2 * * * /usr/bin/php /path/to/php-backup-remote/run.php > /dev/null 2>&1
+```
 
 ## How It Works
 
-1.  **Initialization**: Loads configuration from `.env` and sets up the logger.
-2.  **Pre-flight Checks**: `SystemChecker` verifies that CPU load and disk space are within the configured limits and that the script is running within the allowed time window.
-3.  **Find Users**: `LocalFinder` scans the `/home/` directory to find all active HestiaCP user accounts.
-4.  **Process Each User**: For each user found:
-    a. **Archive**: `ArchiveHandler` creates a `.tar.gz` archive of the user's home directory.
-    b. **Encrypt**: The archive is then encrypted using OpenSSL with AES-256-CBC.
-    c. **Upload**: The encrypted archive is streamed to the configured remote storage using `StorageFactory` and Flysystem.
-    d. **Cleanup**: The local temporary archive is deleted.
-5.  **Rotate Backups**: `RotationManager` connects to the remote storage, lists all existing backups for the project, and deletes old archives according to the daily, weekly, and monthly retention policy.
-6.  **Notification**: `NotificationManager` sends a summary of the operation (success or failure) via the configured channels.
+1. **Initialization**: Load `.env` and bootstrap services.
+2. **Locking**: Prevent concurrent runs with a lock file.
+3. **Pre-flight Checks**: CPU, disk space, and time-window validation.
+4. **Archive**: Create compressed archive per user directory.
+5. **Encrypt**: Encrypt archive with AES or GPG.
+6. **Upload**: Stream to configured remote storage.
+7. **Cleanup**: Remove local temporary files and lock.
+8. **Rotation**: List remote files and delete older backups beyond policy.
+9. **Notification**: Send success or failure alerts.
+
+## Testing
+
+Run PHPUnit unit tests:
+
+```bash
+./libs/vendor/bin/phpunit --configuration=phpunit.xml
+```
+
+## Contributing
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Report issues using [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) and request features via [feature request template](.github/ISSUE_TEMPLATE/feature_request.md).
 
 ## License
 
-This project is open-source software licensed under the [MIT license](LICENSE).
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

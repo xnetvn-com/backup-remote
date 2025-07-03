@@ -68,7 +68,7 @@ class LocalFinder
                     $hasUser = true;
                 }
             }
-            // Nếu không có subdirectory, kiểm tra file backup trực tiếp
+            // If no subdirectory, check for backups directly in the base directory
             if (!$hasUser) {
                 $backupFiles = glob(rtrim($baseDir, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
                 if ($backupFiles && count($backupFiles) > 0) {

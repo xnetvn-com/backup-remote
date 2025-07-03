@@ -35,8 +35,8 @@ $tmpDir = Helper::getTmpDir();
 $downloadDir = rtrim($tmpDir, '/') . '/download';
 if (!is_dir($downloadDir)) {
     if (!mkdir($downloadDir, 0770, true) && !is_dir($downloadDir)) {
-        $logger->error("Không thể tạo thư mục download: $downloadDir");
-        echo "[LỖI] Không thể tạo thư mục download: $downloadDir\n";
+        $logger->error("Failed to create download directory: $downloadDir");
+        echo "[ERROR] Failed to create download directory: $downloadDir\n";
         exit(11);
     }
 }
@@ -47,12 +47,12 @@ function cli_select($title, $options, $default = 0) {
     foreach ($options as $i => $opt) {
         echo "  [" . ($i+1) . "] $opt\n";
     }
-    echo "Chọn số (1-" . count($options) . ") [mặc định: " . ($default+1) . "]: ";
+    echo "Select an option (1-" . count($options) . ") [default: " . ($default+1) . "]: ";
     $input = trim(fgets(STDIN));
     if ($input === '' && isset($options[$default])) return $options[$default];
     $idx = (int)$input - 1;
     if ($idx >= 0 && $idx < count($options)) return $options[$idx];
-    echo "Lựa chọn không hợp lệ.\n";
+    echo "Invalid selection.\n";
     return cli_select($title, $options, $default);
 }
 
@@ -97,18 +97,21 @@ try {
             $logger->error("No backup files found on remote.");
             exit(10);
         }
-        $username = cli_select('Chọn user cần restore:', $users);
+        // Select user to restore
+        $username = cli_select('Select user to restore:', $users);
     }
     if (!$version || !isset($backups[$username][$version])) {
         $versions = array_keys($backups[$username]);
-        rsort($versions); // mới nhất đầu tiên
-        $version = cli_select('Chọn phiên bản backup:', $versions, 0);
+        rsort($versions); // newest first
+        // Select backup version
+        $version = cli_select('Select backup version:', $versions, 0);
     }
     // Chọn file backup phù hợp (ưu tiên file mới nhất, đúng pattern)
     $files = $backups[$username][$version];
     // Nếu có nhiều file (nén/mã hóa khác nhau), cho chọn
     if (count($files) > 1) {
-        $file = cli_select('Chọn file backup (theo định dạng nén/mã hóa):', $files, 0);
+        // Select backup file by compression/encryption format
+        $file = cli_select('Select backup file (compression/encryption):', $files, 0);
     } else {
         $file = $files[0];
     }
@@ -116,14 +119,14 @@ try {
     $localFile = rtrim($outdir, '/') . '/' . basename($file);
     $skipDownload = false;
     if (file_exists($localFile)) {
-        echo "\n[CẢNH BÁO] File $localFile đã tồn tại. Bạn có muốn ghi đè? (y/N): ";
+        echo "\n[WARNING] File $localFile already exists. Overwrite? (y/N): ";
         $input = strtolower(trim(fgets(STDIN)));
         if ($input !== 'y' && $input !== 'yes') {
-            $logger->warning("Người dùng chọn không ghi đè file đã tồn tại: $localFile. Sẽ sử dụng file hiện có để giải mã/giải nén.");
-            echo "[BỎ QUA] Bỏ qua bước tải về, tiếp tục xử lý file hiện có: $localFile\n";
+            $logger->warning("User chose not to overwrite existing file: $localFile. Using existing file for processing.");
+            echo "[SKIP] Skipping download, processing existing file: $localFile\n";
             $skipDownload = true;
         } else {
-            $logger->info("Ghi đè file đã tồn tại: $localFile");
+            $logger->info("Overwriting existing file: $localFile");
         }
     }
     if (!$skipDownload) {
@@ -146,7 +149,8 @@ try {
         $logger->info("Downloaded file: $localFile");
     }
     // Giải mã và giải nén tự động
-    $password = Helper::env('BACKUP_PASSWORD');
+    // Get encryption password from environment
+    $password = Helper::env('ENCRYPTION_PASSWORD');
     $decrypted = $localFile;
     $decryptOk = true;
     if (str_ends_with($localFile, '.xenc')) {
@@ -155,8 +159,8 @@ try {
         if ($decryptOk) {
             $logger->info("Decrypted: $decrypted");
         } else {
-            $logger->error("Giải mã AES thất bại. Kiểm tra mật khẩu hoặc file nguồn.");
-            echo "[LỖI] Giải mã AES thất bại. File đầu ra có thể không hợp lệ!\n";
+            $logger->error("AES decryption failed. Check password or source file.");
+            echo "[ERROR] AES decryption failed. Output file may be invalid!\n";
         }
     } elseif (str_ends_with($localFile, '.gpg')) {
         $decrypted = preg_replace('/\.gpg$/', '', $localFile);
@@ -164,8 +168,8 @@ try {
         if ($decryptOk) {
             $logger->info("GPG decrypted: $decrypted");
         } else {
-            $logger->error("Giải mã GPG thất bại. Kiểm tra mật khẩu hoặc file nguồn.");
-            echo "[LỖI] Giải mã GPG thất bại. File đầu ra có thể không hợp lệ!\n";
+            $logger->error("GPG decryption failed. Check password or source file.");
+            echo "[ERROR] GPG decryption failed. Output file may be invalid!\n";
         }
     } elseif (str_ends_with($localFile, '.zst')) {
         $decrypted = preg_replace('/\.zst$/', '', $localFile);
@@ -173,8 +177,8 @@ try {
         if ($decryptOk) {
             $logger->info("Zstd decrypted: $decrypted");
         } else {
-            $logger->error("Giải mã Zstd thất bại. Kiểm tra mật khẩu hoặc file nguồn.");
-            echo "[LỖI] Giải mã Zstd thất bại. File đầu ra có thể không hợp lệ!\n";
+            $logger->error("Zstd decryption failed. Check password or source file.");
+            echo "[ERROR] Zstd decryption failed. Output file may be invalid!\n";
         }
     }
     // Giải nén nếu cần (chưa implement extraction thực tế)
@@ -182,8 +186,8 @@ try {
     $extractionNeeded = preg_match('/\.(tar\.gz|tar\.zst|tar\.bz2|tar\.xz|tar|zip|7z)$/', $decrypted);
     if ($extractionNeeded) {
         // TODO: implement extraction logic if needed
-        $logger->warning("Chưa thực thi giải nén tự động cho định dạng archive. File trả về vẫn là archive.");
-        echo "[CẢNH BÁO] File backup là archive (tar/zip/7z...). Bạn cần tự giải nén thủ công nếu cần.\n";
+        $logger->warning("Automatic extraction not implemented for archive files. Archive remains unchanged.");
+        echo "[WARNING] Backup file is an archive (tar/zip/7z...). Please extract manually if needed.\n";
         $logger->info("Backup archive ready: $decrypted");
     }
     $logger->info("Backup file for user=$username, version=$version is ready at $final");
@@ -192,14 +196,14 @@ try {
         $size = filesize($final);
         $sizeStr = Helper::formatSize($size);
         if ($size === 0) {
-            echo "\n[WARNING] File đầu ra có kích thước 0 B. Có thể quá trình giải mã/giải nén đã thất bại hoặc file nguồn rỗng.\n";
-            $logger->warning("File đầu ra $final có kích thước 0 B. Kiểm tra lại quá trình restore.");
+            echo "\n[WARNING] Output file size is 0 B. Decryption or extraction may have failed or source file is empty.\n";
+            $logger->warning("Output file $final has size 0 B. Check decryption/extraction process.");
         }
-        echo "\n[OK] Đã hoàn tất. Đường dẫn file: $final\n";
-        echo "Kích thước: $sizeStr\n";
+        echo "\n[OK] Completed. File available at: $final\n";
+        echo "Size: $sizeStr\n";
     } else {
-        echo "\n[WARNING] Không tìm thấy file đầu ra: $final\n";
-        $logger->error("Không tìm thấy file đầu ra: $final");
+        echo "\n[WARNING] Output file not found: $final\n";
+        $logger->error("Output file not found: $final");
     }
     exit(0);
 } catch (Throwable $e) {

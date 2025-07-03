@@ -40,10 +40,11 @@ class ArchiveHandler
     public function create(string $username, string $userPath, bool $isDryRun): string|array|null
     {
         $tempDir = Helper::getTmpDir();
-        $password = Helper::env('BACKUP_PASSWORD', $_ENV['BACKUP_PASSWORD'] ?? null);
+        // Get encryption password from environment (ENCRYPTION_PASSWORD or fallback to BACKUP_PASSWORD)
+        $password = Helper::env('ENCRYPTION_PASSWORD', Helper::env('BACKUP_PASSWORD', $_ENV['BACKUP_PASSWORD'] ?? null));
         if (!$password) {
-            $this->logger->error('BACKUP_PASSWORD is not set. Encryption is required.');
-            throw new \RuntimeException('BACKUP_PASSWORD is not set.');
+            $this->logger->error('ENCRYPTION_PASSWORD is not set. Encryption is required.');
+            throw new \RuntimeException('ENCRYPTION_PASSWORD is not set.');
         }
         $compression = strtolower(Helper::env('BACKUP_COMPRESSION', 'gzip'));
         $encryption = strtolower(Helper::env('BACKUP_ENCRYPTION', 'aes'));

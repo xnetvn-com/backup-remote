@@ -132,6 +132,18 @@ class Helper
     public static function detectAllRemotes(): array
     {
         $remotes = [];
+        // AWS S3 via AWS_ environment variables
+        if (!empty($_ENV['AWS_ACCESS_KEY_ID']) && !empty($_ENV['AWS_SECRET_ACCESS_KEY']) && !empty($_ENV['AWS_BUCKET'])) {
+            $remotes[] = [
+                'driver' => 's3',
+                'key' => $_ENV['AWS_ACCESS_KEY_ID'],
+                'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
+                'region' => $_ENV['AWS_DEFAULT_REGION'] ?? '',
+                'bucket' => $_ENV['AWS_BUCKET'],
+                'endpoint' => $_ENV['AWS_ENDPOINT'] ?? null,
+            ];
+        }
+        // Legacy S3_* variables support
         if (!empty($_ENV['S3_KEY']) && !empty($_ENV['S3_SECRET']) && !empty($_ENV['S3_BUCKET'])) {
             $remotes[] = [
                 'driver' => 's3',
