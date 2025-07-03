@@ -1,3 +1,14 @@
+# Copyright (c) 2025 xNetVN Inc.
+# Website: https://xnetvn.com/
+# License Contact: license@xnetvn.net
+# License Name: Apache License 2.0
+# License URL: https://www.apache.org/licenses/LICENSE-2.0
+
+# Ignore all environment config files except example/sample
+.env
+.env.*
+!*.env.example
+!*.env.sample
 
 # Log files
 *.log
@@ -5,4 +16,15 @@
 # htaccess
 /.htaccess
 
-.env
+# Ignore IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Ignore logs and runtime
+storage/logs/
+
+# Ignore vendor (if not committed)
+/vendor/
+/libs/vendor/

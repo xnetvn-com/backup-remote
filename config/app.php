@@ -57,8 +57,8 @@ return [
     'performance' => [
         // Set a backup window. Backups will only run within this time frame.
         // Use 24-hour format 'HH:MM'. Leave empty to disable.
-        'allowed_start_time' => Helper::env('ALLOWED_START_TIME', '01:00'),
-        'allowed_end_time'   => Helper::env('ALLOWED_END_TIME', '05:00'),
+        'allowed_start_time' => Helper::env('ALLOWED_START_TIME', ''),
+        'allowed_end_time'   => Helper::env('ALLOWED_END_TIME', ''),
 
         // Maximum 1-minute average CPU load. If the load exceeds this value,
         // the backup will be aborted. Set to 0 to disable.
@@ -90,15 +90,46 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | HestiaCP Settings
+    | Backup Directories
     |--------------------------------------------------------------------------
     |
-    | HestiaCP specific settings.
+    | The directories where all backup data will be stored. Supports multiple
+    | directories (comma-separated in BACKUP_DIRS). Make sure all paths are
+    | writable and have sufficient space for backup operations.
     |
     */
-    'hestia' => [
-        'path' => Helper::env('HESTIA_PATH', '/usr/local/hestia'),
-    ],
+    'backup_dirs' => array_map('trim', explode(',', Helper::env('BACKUP_DIRS', '/backup'))),
 
-    // ... other configurations ...
+    /*
+    |--------------------------------------------------------------------------
+    | Remote Storage Settings (Multi-remote)
+    |--------------------------------------------------------------------------
+    |
+    | Configure multiple remote storage backends for backup. Each remote is an
+    | array with a 'driver' key and its config. If REMOTE_DRIVER is set, only that
+    | driver is used. Otherwise, all remotes detected from env will be used.
+    |
+    */
+    'remotes' => Helper::env('REMOTE_DRIVER')
+        ? [[
+            'driver' => Helper::env('REMOTE_DRIVER'),
+            // Optionally, add config mapping here if needed
+        ]]
+        : Helper::detectAllRemotes(),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rotation Settings
+    |--------------------------------------------------------------------------
+    |
+    | Configure backup rotation/retention policies. You can enable/disable rotation
+    | and set the number of latest backups to keep per user. Override via env if needed.
+    |
+    */
+    'rotation' => [
+        'enabled' => Helper::env('ROTATION_ENABLED', true),
+        'policies' => [
+            'keep_latest' => (int) Helper::env('ROTATION_KEEP_LATEST', 7),
+        ],
+    ],
 ];

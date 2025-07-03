@@ -52,6 +52,12 @@ class StorageFactory
                 $adapter = new AwsS3V3Adapter($client, $config['bucket']);
                 return new Filesystem($adapter);
             case 'ftp':
+                $passive = $config['passive'] ?? true;
+                if (is_string($passive)) {
+                    $passive = !in_array(strtolower($passive), ['false', '0', 'off'], true);
+                } else {
+                    $passive = (bool)$passive;
+                }
                 $adapter = new FtpAdapter(FtpConnectionOptions::fromArray([
                     'host' => $config['host'],
                     'username' => $config['user'],
@@ -59,6 +65,7 @@ class StorageFactory
                     'port' => (int)($config['port'] ?? 21),
                     'root' => $config['path'] ?? '/',
                     'ssl' => (bool)($config['ssl'] ?? false),
+                    'passive' => $passive,
                 ]));
                 return new Filesystem($adapter);
             case 'local':

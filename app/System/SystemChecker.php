@@ -46,6 +46,13 @@ class SystemChecker
             throw new \Exception("CPU load is too high for backup operation.");
         }
 
+        // Refactor: Default temp_dir if not set
+        if (!isset($this->config['local']['temp_dir']) || !is_string($this->config['local']['temp_dir']) || $this->config['local']['temp_dir'] === '') {
+            $defaultTmp = \App\Utils\Helper::getTmpDir();
+            $this->config['local']['temp_dir'] = $defaultTmp;
+            $this->logger->info("Using default temp directory: {$defaultTmp}");
+        }
+
         if (
             !$this->checkDiskFree(
                 $this->config['local']['temp_dir'],

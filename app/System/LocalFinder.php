@@ -23,7 +23,7 @@ use App\Utils\Logger;
 use Psr\Log\LoggerInterface;
 
 /**
- * Finds HestiaCP users on the local system.
+ * Finds backup users and files in the configured backup directories.
  */
 
 class LocalFinder
@@ -38,40 +38,44 @@ class LocalFinder
     }
 
     /**
-     * Finds all HestiaCP users based on the base directory.
+     * Finds all users (subdirectories) in all backup directories.
      *
      * @return array An associative array of [username => path].
      */
-
-    public function findHestiaUsers(): array
+    public function findBackupUsers(): array
     {
-        $baseDir = $this->config['hestia']['base_path'];
-        $excludeUsers = $this->config['hestia']['exclude_users'] ?? [];
-        $this->logger->info("Searching for Hestia users in: {$baseDir}");
-
-        if (!is_dir($baseDir)) {
-            $this->logger->error("Hestia base path does not exist: {$baseDir}");
-            return [];
-        }
-
+        $dirs = $this->config['backup_dirs'] ?? ['/backup'];
         $users = [];
-        $items = scandir($baseDir);
-        if ($items === false) {
-            $this->logger->error("Could not read Hestia base path: {$baseDir}");
-            return [];
-        }
-
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
+        foreach ($dirs as $baseDir) {
+            $this->logger->info("Searching for users in backup dir: {$baseDir}");
+            if (!is_dir($baseDir)) {
+                $this->logger->warning("Backup directory does not exist: {$baseDir}");
                 continue;
             }
-
-            $path = $baseDir . '/' . $item;
-            if (is_dir($path) && !in_array($item, $excludeUsers)) {
-                $users[$item] = $path;
+            $items = scandir($baseDir);
+            if ($items === false) {
+                $this->logger->warning("Could not read backup directory: {$baseDir}");
+                continue;
+            }
+            $hasUser = false;
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..') {
+                    continue;
+                }
+                $path = $baseDir . '/' . $item;
+                if (is_dir($path)) {
+                    $users[$item] = $path;
+                    $hasUser = true;
+                }
+            }
+            // Nếu không có subdirectory, kiểm tra file backup trực tiếp
+            if (!$hasUser) {
+                $backupFiles = glob(rtrim($baseDir, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
+                if ($backupFiles && count($backupFiles) > 0) {
+                    $users['__root__'] = $baseDir;
+                }
             }
         }
-
         return $users;
     }
 
@@ -98,5 +102,29 @@ class LocalFinder
     {
         $files = glob(rtrim($dir, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
         return $files ?: [];
+    }
+
+    /**
+     * Finds all backup files (tar, zip, gz, zst) in all configured backup directories.
+     *
+     * @return array An array of absolute file paths.
+     */
+    public function findBackupFiles(): array
+    {
+        $dirs = $this->config['backup_dirs'] ?? ['/backup'];
+        $files = [];
+        foreach ($dirs as $baseDir) {
+            if (!is_dir($baseDir)) {
+                $this->logger->warning("Backup directory does not exist: {$baseDir}");
+                continue;
+            }
+            $found = glob(rtrim($baseDir, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
+            if ($found !== false) {
+                $files = array_merge($files, $found);
+            } else {
+                $this->logger->warning("Could not read backup files in directory: {$baseDir}");
+            }
+        }
+        return $files;
     }
 }

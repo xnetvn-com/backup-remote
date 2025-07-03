@@ -19,7 +19,7 @@ class AlertThrottler
     public function __construct($config)
     {
         $this->interval = $config['NOTIFY_INTERVAL_MINUTES'] ?? 180;
-        $this->stateFile = sys_get_temp_dir() . '/backup_notify_state.json';
+        $this->stateFile = \App\Utils\Helper::getTmpDir() . '/backup_notify_state.json';
         if (file_exists($this->stateFile)) {
             $this->state = json_decode(file_get_contents($this->stateFile), true) ?: [];
         }

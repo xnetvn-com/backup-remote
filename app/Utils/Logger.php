@@ -40,4 +40,14 @@ class Logger
         }
         return self::$instance;
     }
+
+    public static function info(string $message, array $context = []): void
+    {
+        self::getLogger()->info($message, $context);
+    }
+
+    public static function error(string $message, array $context = []): void
+    {
+        self::getLogger()->error($message, $context);
+    }
 }

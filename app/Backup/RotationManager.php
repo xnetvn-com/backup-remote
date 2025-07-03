@@ -64,7 +64,7 @@ class RotationManager
     {
         $groups = [];
         foreach ($files as $file) {
-            // hestia-user.2025-06-28_10-30-00.tar.gz.enc
+            // hestia-user.2025-06-28_10-30-00.tar.gz.xenc
             if (preg_match('/(.+?)\.\d{4}-\d{2}-\d{2}/i', basename($file['path']), $matches)) {
                 $username = $matches[1];
                 $groups[$username][] = $file;

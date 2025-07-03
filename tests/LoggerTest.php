@@ -5,18 +5,21 @@
  * License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
  * Contact: license@xnetvn.net
  */
+
+declare(strict_types=1);
+
 use PHPUnit\Framework\TestCase;
 use App\Utils\Logger;
 
 class LoggerTest extends TestCase
 {
-    public function test_should_log_info_message()
+    public function test_should_log_info_message(): void
     {
-        // Call the log function, test passes if no exception is thrown (Monolog will write to file)
         $this->expectNotToPerformAssertions();
         Logger::info('Test info');
     }
-    public function test_should_log_error_message()
+
+    public function test_should_log_error_message(): void
     {
         $this->expectNotToPerformAssertions();
         Logger::error('Test error');

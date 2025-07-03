@@ -63,6 +63,21 @@ All configuration is done in the `.env` file.
 
 ---
 
+#### Backup Directories
+| Variable | Description | Default |
+| --- | --- | --- |
+| `BACKUP_DIRS` | Comma-separated list of absolute paths to backup directories on the server. Supports multiple directories. If not set, defaults to `/backup`. | `/backup` |
+
+**Example:**
+```
+BACKUP_DIRS=/backup,/mnt/hdd/backup,/srv/data/backups
+```
+- All listed directories must be absolute paths and writable by the application user.
+- The backup process will scan all specified directories for user data to back up.
+- If you only want to back up a single directory, just provide one path (e.g., `/backup`).
+
+---
+
 #### Remote Storage
 Set up the primary remote storage driver.
 
@@ -89,6 +104,7 @@ Set up the primary remote storage driver.
 | `FTP_PORT` | FTP port. |
 | `FTP_ROOT` | The root path to use on the FTP server. |
 | `FTP_SSL` | Whether to use a secure FTP connection (FTPS). |
+| `FTP_PASSIVE` | Enable FTP passive mode. `true` (recommended for most environments), `false` for active mode. Default: `true`. |
 
 ---
 
@@ -139,6 +155,54 @@ Set up the primary remote storage driver.
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Your Telegram Bot's API token. |
 | `TELEGRAM_CHAT_ID` | The target chat/channel ID. |
+
+---
+
+### Compression & Encryption
+
+| Variable                   | Description                                                                                 | Default |
+|---------------------------|---------------------------------------------------------------------------------------------|---------|
+| BACKUP_COMPRESSION        | Compression method before upload (`none`, `zstd`, `gzip`, `bzip2`, `xz`, `zip`, `7z`, ...)   | `gzip`  |
+| BACKUP_COMPRESSION_LEVEL  | Compression level for selected method. See below for valid range.                            | `1`     |
+| BACKUP_ENCRYPTION         | Encryption method before upload (`none`, `aes`, `gpg`, ...)                                 | `aes`   |
+
+**Compression Level Ranges:**
+- `gzip`: 1 (fastest, least compression) to 9 (slowest, best compression)
+- `zstd`: 1 (fastest) to 22 (best, slowest; 19+ requires zstd >= 1.3.4)
+- `bzip2`: 1 (fastest) to 9 (best)
+- `xz`: 0 (fastest) to 9 (best)
+- `zip`: 0 (fastest) to 9 (best)
+- `7z`: 1 (fastest) to 9 (best)
+- `none`: ignored
+
+> ⚠️ Nếu giá trị BACKUP_COMPRESSION_LEVEL ngoài phạm vi hợp lệ, hệ thống sẽ tự động ép về giá trị gần nhất, không báo lỗi.
+
+Ví dụ cấu hình:
+```env
+BACKUP_COMPRESSION=zip
+BACKUP_COMPRESSION_LEVEL=9
+BACKUP_ENCRYPTION=aes
+```
+
+### Required CLI Tools for Compression/Encryption
+
+To use all supported compression and encryption methods, ensure the following CLI tools are installed on your system:
+
+| Method   | Required CLI Tool | Install Command (Debian/Ubuntu)         |
+|----------|-------------------|-----------------------------------------|
+| gzip     | gzip              | sudo apt install gzip                   |
+| zstd     | zstd              | sudo apt install zstd                   |
+| bzip2    | bzip2             | sudo apt install bzip2                  |
+| xz       | xz-utils          | sudo apt install xz-utils               |
+| zip      | zip, unzip        | sudo apt install zip unzip              |
+| 7z       | p7zip-full        | sudo apt install p7zip-full             |
+| gpg      | gpg               | sudo apt install gnupg                  |
+
+- All compression/encryption is performed via streaming for large file support.
+- If a CLI tool is missing, the corresponding method will fail and be logged as an error.
+- For best compatibility, use recent versions of each tool (zstd >= 1.5.0 recommended for password support).
+
+---
 
 ## Usage
 

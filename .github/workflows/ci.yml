@@ -5,8 +5,8 @@
 #
 # GitHub Actions CI/CD workflow for PHP project - xNetVN Inc.
 #
-# - Tự động kiểm thử, lint, coverage, SAST, quét secret, kiểm tra dependency.
-# - Đảm bảo tuân thủ tiêu chuẩn DevSecOps, bảo mật, chất lượng code.
+# - Automatically run tests, lint, coverage, SAST, secret scan, dependency check.
+# - Ensure compliance with DevSecOps, security, and code quality standards.
 
 name: CI/CD Pipeline
 

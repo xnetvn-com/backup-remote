@@ -32,6 +32,10 @@ class BackupManager
 
     public function __construct(array $config, LoggerInterface $logger, NotificationManager $notificationManager)
     {
+        // Validate backup_dirs configuration
+        if (empty($config['backup_dirs']) || !is_array($config['backup_dirs'])) {
+            throw new \InvalidArgumentException('Missing or invalid backup dirs configuration.');
+        }
         $this->config = $config;
         $this->logger = $logger;
         $this->notificationManager = $notificationManager;
@@ -46,16 +50,41 @@ class BackupManager
 
     public function run(bool $isDryRun = false): void
     {
-        $usersToBackup = $this->localFinder->findHestiaUsers();
+        $usersToBackup = $this->localFinder->findBackupUsers();
         if (empty($usersToBackup)) {
-            $this->logger->info('No Hestia users found to backup.');
+            $this->logger->info('No users found to backup in configured backup directories.');
             return;
         }
 
         $this->logger->info('Found users to backup: ' . implode(', ', array_keys($usersToBackup)));
 
-        $storage = StorageFactory::create($this->config['remote']['driver'], $this->config, $this->logger);
+        // Defensive check for remotes config
+        if (empty($this->config['remotes']) || !is_array($this->config['remotes'])) {
+            $message = 'Missing or invalid remotes configuration.';
+            $this->logger->error($message, ['config' => $this->config['remotes'] ?? null]);
+            $this->notificationManager->sendAlert('Backup failed: remotes misconfiguration', $message);
+            return;
+        }
+
         $archiveHandler = new ArchiveHandler($this->config, $this->logger);
+        $storages = [];
+        foreach ($this->config['remotes'] as $remoteConfig) {
+            if (empty($remoteConfig['driver'])) {
+                $this->logger->warning('Remote config missing driver, skipping.', ['remote' => $remoteConfig]);
+                continue;
+            }
+            $storage = StorageFactory::create($remoteConfig['driver'], $remoteConfig, $this->logger);
+            if ($storage) {
+                $storages[] = ['driver' => $remoteConfig['driver'], 'storage' => $storage];
+            } else {
+                $this->logger->error('Failed to create storage for remote.', ['remote' => $remoteConfig]);
+            }
+        }
+        if (empty($storages)) {
+            $this->logger->error('No valid remote storage backends available.');
+            $this->notificationManager->sendAlert('Backup failed: no valid remote storage', 'No valid remote storage backends available.');
+            return;
+        }
 
         foreach ($usersToBackup as $username => $userPath) {
             $this->logger->info("--- Starting backup for user: {$username} ---");
@@ -63,8 +92,20 @@ class BackupManager
                 $archivePath = $archiveHandler->create($username, $userPath, $isDryRun);
 
                 if ($archivePath) {
-                    $this->uploadBackup($storage, $archivePath, $isDryRun);
-                    $this->cleanupLocal($archivePath, $isDryRun);
+                    if (is_array($archivePath)) {
+                        // Trường hợp backup file trực tiếp trong thư mục gốc
+                        foreach ($archivePath as $filePath) {
+                            foreach ($storages as $storageInfo) {
+                                $this->uploadBackup($storageInfo['storage'], $filePath, $isDryRun, $storageInfo['driver']);
+                            }
+                            $this->cleanupLocal($filePath, $isDryRun);
+                        }
+                    } else {
+                        foreach ($storages as $storageInfo) {
+                            $this->uploadBackup($storageInfo['storage'], $archivePath, $isDryRun, $storageInfo['driver']);
+                        }
+                        $this->cleanupLocal($archivePath, $isDryRun);
+                    }
                 }
             } catch (Throwable $e) {
                 $this->logger->error("Failed to backup user {$username}: " . $e->getMessage(), ['exception' => $e]);
@@ -73,13 +114,16 @@ class BackupManager
             $this->logger->info("--- Finished backup for user: {$username} ---");
         }
 
-        $this->performRotation($storage, $isDryRun);
+        // Perform rotation for each remote
+        foreach ($storages as $storageInfo) {
+            $this->performRotation($storageInfo['storage'], $isDryRun, $storageInfo['driver']);
+        }
     }
 
-    private function uploadBackup(Filesystem $storage, string $archivePath, bool $isDryRun): void
+    private function uploadBackup(Filesystem $storage, string $archivePath, bool $isDryRun, string $driver = ''): void
     {
         $remotePath = ($this->config['remote']['path'] ?? '') . '/' . basename($archivePath);
-        $this->logger->info("Uploading '{$archivePath}' to '{$remotePath}'.");
+        $this->logger->info("Uploading '{$archivePath}' to '{$remotePath}' on driver '{$driver}'.");
 
         if ($isDryRun) {
             $this->logger->info('[DRY-RUN] Skipping actual upload.');
@@ -93,9 +137,9 @@ class BackupManager
 
         try {
             $storage->writeStream($remotePath, $stream);
-            $this->logger->info("Upload successful.");
+            $this->logger->info("Upload successful to driver '{$driver}'.");
         } catch (Throwable $e) {
-            throw new \Exception("Failed to upload to remote storage: " . $e->getMessage(), 0, $e);
+            throw new \Exception("Failed to upload to remote storage ({$driver}): " . $e->getMessage(), 0, $e);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -118,7 +162,7 @@ class BackupManager
         }
     }
 
-    private function performRotation(Filesystem $storage, bool $isDryRun): void
+    private function performRotation(Filesystem $storage, bool $isDryRun, string $driver = ''): void
     {
         if (empty($this->config['rotation']['enabled'])) {
             $this->logger->info('Backup rotation is disabled. Skipping.');

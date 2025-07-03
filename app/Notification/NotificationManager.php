@@ -70,7 +70,7 @@ class NotificationManager
 
     public function sendSuccess(string $message): void
     {
-        $this->send('success', 'Backup Successful', $message);
+        $this->send('info', 'Backup Successful', $message);
     }
 
     /**
@@ -106,15 +106,17 @@ class NotificationManager
     /**
      * Generic send method to dispatch notifications to all registered channels.
      *
-     * @param string $level The notification level (e.g., 'success', 'error', 'warning').
+     * @param string $level The notification level (e.g., 'info', 'error', 'warning').
      * @param string $subject The subject/title of the notification.
      * @param string $message The main message content.
      * @param string|null $details Optional extended details.
      */
-
     private function send(string $level, string $subject, string $message, ?string $details = null): void
     {
-        $this->logger->log($level, $message, ['subject' => $subject, 'details' => $details]);
+        // Only allow valid PSR-3 levels for logger
+        $validLevels = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
+        $logLevel = in_array($level, $validLevels, true) ? $level : 'info';
+        $this->logger->log($logLevel, $message, ['subject' => $subject, 'details' => $details]);
         foreach ($this->channels as $channel) {
             $channelIdentifier = get_class($channel);
             if ($this->throttler->canSend($channelIdentifier)) {

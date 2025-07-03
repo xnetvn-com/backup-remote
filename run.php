@@ -32,9 +32,16 @@ $isDryRun = isset($options['dry-run']);
 // --- Bootstrap ---
 require_once __DIR__ . '/libs/vendor/autoload.php';
 
-// Load environment variables
-$dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->load();
+// --- Environment Detection & Loading ---
+$env = getenv('APP_ENV') ?: 'development';
+$envFile = ".env.$env";
+if (file_exists(__DIR__ . "/$envFile")) {
+    $dotenv = Dotenv::createImmutable(__DIR__, $envFile);
+    $dotenv->safeLoad();
+} else {
+    $dotenv = Dotenv::createImmutable(__DIR__);
+    $dotenv->safeLoad();
+}
 
 // Load configuration
 $config = require __DIR__ . '/config/app.php';
@@ -48,13 +55,27 @@ if ($isDryRun) {
 }
 
 // --- Main Execution ---
-$lockFile = __DIR__ . '/.backup.lock';
+// Sử dụng Helper::getTmpDir() để xác định thư mục tạm
+$tmpDir = App\Utils\Helper::getTmpDir();
+$lockFile = $tmpDir . '/.backup.lock';
 $lockAcquired = false;
 try {
     // 1. Lock Process
     if (file_exists($lockFile)) {
-        $logger->error("Another backup process is already running. Exiting.");
-        exit(2);
+        $pid = trim(@file_get_contents($lockFile));
+        $pid = is_numeric($pid) ? (int)$pid : 0;
+        $isRunning = false;
+        if ($pid > 0) {
+            // Kiểm tra tiến trình còn tồn tại không (Linux)
+            $isRunning = posix_kill($pid, 0);
+        }
+        if ($pid > 0 && $isRunning) {
+            $logger->error("Another backup process is already running (PID: $pid). Exiting.");
+            exit(2);
+        } else {
+            $logger->warning("Stale lock file detected (PID: $pid). Removing orphaned lock and continuing.");
+            @unlink($lockFile);
+        }
     }
     if (file_put_contents($lockFile, getmypid() ?: "unknown") === false) {
         $logger->error("Failed to create lock file. Exiting.");
