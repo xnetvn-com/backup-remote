@@ -4,6 +4,9 @@
     Website: https://xnetvn.com/
     License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
     Contact: license@xnetvn.net
+    This file is part of the xNetVN PHP Backup Remote project.
+    This project is licensed under the Apache License 2.0.
+    You may not use this file except in compliance with the License.
 -->
 <phpunit bootstrap="libs/vendor/autoload.php"
          colors="true"

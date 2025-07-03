@@ -4,7 +4,7 @@
 # Contact: license@xnetvn.net
 #
 # Dependabot configuration for PHP project - xNetVN Inc.
-# Tự động quét và cập nhật dependency, cảnh báo lỗ hổng bảo mật.
+# Automatically scan and update dependencies, alert for security vulnerabilities.
 
 version: 2
 updates:
