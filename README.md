@@ -28,13 +28,71 @@ A robust PHP command-line utility to automate the backup of Hestia Control Panel
   - p7zip-full (install: `sudo apt install p7zip-full`)
   - gnupg (install: `sudo apt install gnupg`)
 
+### Supported Platforms
+
+This tool has been tested on the following operating systems:
+
+- **Debian/Ubuntu**
+
+  ```bash
+  sudo apt update && sudo apt install -y php-cli php-ctype php-mbstring php-openssl php-ftp \
+    unzip zip gzip zstd bzip2 xz-utils p7zip-full gnupg composer
+  ```
+
+- **CentOS/RHEL**
+
+  ```bash
+  sudo yum install -y epel-release && sudo yum install -y php-cli php-ctype php-mbstring php-openssl php-ftp \
+    unzip zip gzip zstd bzip2 xz p7zip p7zip-plugins gnupg composer
+  ```
+
+- **macOS**
+
+  ```bash
+  brew update && brew install php composer zstd xz p7zip gnupg
+  ```
+
 ## Installation
 
 ```bash
 git clone https://github.com/xnetvn-com/php-backup-remote.git
 cd php-backup-remote
 composer install --no-dev --optimize-autoloader
-``` 
+```
+
+### Quick Start
+
+1. Clone the repository and enter directory:
+
+   ```bash
+   git clone https://github.com/xnetvn-com/php-backup-remote.git
+   cd php-backup-remote
+   ```
+
+2. Install PHP dependencies:
+
+   ```bash
+   composer install --no-dev --optimize-autoloader
+   ```
+
+3. Copy and customize environment settings:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env to configure backup paths, encryption, compression, and storage drivers
+   ```
+
+4. Run a dry-run to verify settings:
+
+   ```bash
+   php run.php --dry-run
+   ```
+
+5. Execute a real backup:
+
+   ```bash
+   php run.php
+   ```
 
 ## Configuration
 

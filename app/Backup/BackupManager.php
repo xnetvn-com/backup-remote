@@ -126,6 +126,9 @@ class BackupManager
         foreach ($storages as $storageInfo) {
             $this->performRotation($storageInfo['storage'], $isDryRun, $storageInfo['driver']);
         }
+
+        // Cleanup toàn bộ TMP_DIR sau khi backup xong cho tất cả user
+        $this->cleanupTmpDir($tmpDir, $isDryRun);
     }
 
     /**
@@ -225,6 +228,33 @@ class BackupManager
         } catch (Throwable $e) {
             $this->logger->error('Backup rotation failed: ' . $e->getMessage(), ['exception' => $e]);
             $this->notificationManager->sendAlert('Backup rotation failed', $e->getMessage());
+        }
+    }
+
+    /**
+     * Dọn dẹp toàn bộ file/tệp con trong TMP_DIR (trừ file lock hoặc file đang sử dụng).
+     */
+    private function cleanupTmpDir(string $tmpDir, bool $isDryRun): void
+    {
+        $this->logger->info("Cleaning up all files in TMP_DIR: {$tmpDir}");
+        if ($isDryRun) {
+            $this->logger->info('[DRY-RUN] Skipping TMP_DIR cleanup.');
+            return;
+        }
+        if (!is_dir($tmpDir)) return;
+        $lockFile = $tmpDir . '/.backup.lock';
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($tmpDir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($files as $file) {
+            $path = $file->getRealPath();
+            if ($path === false || $path === $lockFile) continue;
+            if ($file->isFile()) {
+                @unlink($path);
+            } elseif ($file->isDir()) {
+                @rmdir($path);
+            }
         }
     }
 }

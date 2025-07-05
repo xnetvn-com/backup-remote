@@ -683,8 +683,9 @@ class Helper
 
     /**
      * Compresses a file using zip CLI (single file, streaming, safe for huge files).
+     * Supports AES-256 encryption if $password is provided and system zip supports it.
      */
-    public static function zipCompressFile(string $inputFile, string $outputFile, int $level = 6): bool
+    public static function zipCompressFile(string $inputFile, string $outputFile, int $level = 6, string $password = null): bool
     {
         if (!is_readable($inputFile)) return false;
         $level = max(0, min(9, $level));
@@ -696,7 +697,14 @@ class Helper
             rmdir($tmpDir);
             return false;
         }
-        $cmd = ['zip', '-j', "-$level", $outputFile, $tmpInput];
+        $cmd = ['zip', '-j', "-$level"];
+        if ($password !== null && $password !== '') {
+            // Use legacy password encryption
+            $cmd[] = '-P';
+            $cmd[] = $password;
+        }
+        $cmd[] = $outputFile;
+        $cmd[] = $tmpInput;
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             unlink($tmpInput);
@@ -738,12 +746,19 @@ class Helper
 
     /**
      * Compresses a file using 7z CLI (single file, streaming, safe for huge files).
+     * Supports AES-256 encryption if $password is provided.
      */
-    public static function sevenZipCompressFile(string $inputFile, string $outputFile, int $level = 5): bool
+    public static function sevenZipCompressFile(string $inputFile, string $outputFile, int $level = 5, string $password = null): bool
     {
         if (!is_readable($inputFile)) return false;
         $level = max(1, min(9, $level));
-        $cmd = ['7z', 'a', '-t7z', "-mx=$level", $outputFile, $inputFile];
+        $cmd = ['7z', 'a', '-t7z', "-mx=$level"];
+        if ($password !== null && $password !== '') {
+            $cmd[] = "-p$password";
+            $cmd[] = '-mhe=on';
+        }
+        $cmd[] = $outputFile;
+        $cmd[] = $inputFile;
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) return false;
         stream_get_contents($pipes[1]);

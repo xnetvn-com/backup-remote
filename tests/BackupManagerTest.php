@@ -75,5 +75,34 @@ class BackupManagerTest extends TestCase
         $backupManager = new BackupManager($config, $logger, $notificationManager);
         $backupManager->run();
     }
+
+    public function test_should_cleanup_tmp_dir_remove_files(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/test_backup_tmp_' . uniqid();
+        mkdir($tmpDir, 0700, true);
+        $file1 = $tmpDir . '/file1.txt';
+        $file2 = $tmpDir . '/file2.log';
+        file_put_contents($file1, 'test1');
+        file_put_contents($file2, 'test2');
+        $config = [
+            'backup_dirs' => ['/tmp'],
+        ];
+        $logger = $this->getMockBuilder(LoggerInterface::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug', 'log'])
+            ->getMock();
+        $notificationManager = $this->getMockBuilder(NotificationManager::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['sendAlert'])
+            ->getMock();
+        $backupManager = new BackupManager($config, $logger, $notificationManager);
+        $reflection = new \ReflectionClass($backupManager);
+        $cleanupMethod = $reflection->getMethod('cleanupTmpDir');
+        $cleanupMethod->setAccessible(true);
+        $cleanupMethod->invoke($backupManager, $tmpDir, false);
+        $this->assertFileDoesNotExist($file1);
+        $this->assertFileDoesNotExist($file2);
+        @rmdir($tmpDir);
+    }
     // TODO: Add more tests for run(), error handling, etc.
 }
