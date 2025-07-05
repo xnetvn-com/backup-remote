@@ -1,9 +1,8 @@
-# Copyright (c) 2025 xNetVN Inc.
-# Website: https://xnetvn.com/
-# License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
-# Contact: license@xnetvn.net
-#
-# Feature request template
+<!--
+  Copyright (c) 2025 xNetVN Inc.
+  License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+  Contact: license@xnetvn.net
+-->
 ---
 name: "Feature Request"
 description: "Propose a new feature or improvement for the system"

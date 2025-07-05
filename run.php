@@ -36,10 +36,10 @@ require_once __DIR__ . '/libs/vendor/autoload.php';
 $env = getenv('APP_ENV') ?: 'development';
 $envFile = ".env.$env";
 if (file_exists(__DIR__ . "/$envFile")) {
-    $dotenv = Dotenv::createImmutable(__DIR__, $envFile);
+    $dotenv = Dotenv::createUnsafeMutable(__DIR__, $envFile);
     $dotenv->safeLoad();
 } else {
-    $dotenv = Dotenv::createImmutable(__DIR__);
+    $dotenv = Dotenv::createUnsafeMutable(__DIR__);
     $dotenv->safeLoad();
 }
 
@@ -66,7 +66,7 @@ try {
         $pid = is_numeric($pid) ? (int)$pid : 0;
         $isRunning = false;
         if ($pid > 0) {
-            // Kiểm tra tiến trình còn tồn tại không (Linux)
+            // Check if the process is still running (Linux)
             $isRunning = posix_kill($pid, 0);
         }
         if ($pid > 0 && $isRunning) {

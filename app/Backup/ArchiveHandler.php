@@ -130,6 +130,14 @@ class ArchiveHandler
             return $processedFiles;
         }
 
+        // Rename the original file to *.xbk before compression/encryption
+        $xbkUserPath = Helper::addXbkExtension($userPath);
+        if ($userPath !== $xbkUserPath && is_file($userPath)) {
+            // Physically rename the file if it is a single file
+            @copy($userPath, $xbkUserPath);
+            $userPath = $xbkUserPath;
+        }
+
         // Create archive with compression method
         $archiveExt = match ($compression) {
             'zstd', 'zst' => 'tar.zst',
@@ -142,10 +150,15 @@ class ArchiveHandler
             default => 'tar.gz',
         };
         $archivePath = rtrim($tempDir, '/') . '/' . Helper::createArchiveName($username, $archiveExt);
+        $finalArchivePath = $archivePath . ($encryption === 'none' ? '' : ($encryption === 'gpg' ? '.gpg' : '.aes'));
+        if (file_exists($finalArchivePath) && filesize($finalArchivePath) > 0) {
+            $this->logger->info("Archive already exists for user '{$username}' at '{$finalArchivePath}'. Skipping archive creation.");
+            return $finalArchivePath;
+        }
         $this->logger->info("Preparing to create archive for user '{$username}' at '{$archivePath}'.");
         if ($isDryRun) {
             $this->logger->info("[DRY-RUN] Skipping archive creation for {$username}.");
-            return $archivePath . ($encryption !== 'none' ? '.xenc' : '');
+            return $finalArchivePath;
         }
         try {
             $this->logger->debug("Creating archive...");

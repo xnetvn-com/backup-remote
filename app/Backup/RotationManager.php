@@ -7,6 +7,8 @@
  * Contact: license@xnetvn.net
  */
 
+declare(strict_types=1);
+
 // Handles backup rotation logic, deleting old backups
 namespace App\Backup;
 

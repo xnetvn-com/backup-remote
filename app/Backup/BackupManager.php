@@ -86,25 +86,33 @@ class BackupManager
             return;
         }
 
+        $tmpDir = \App\Utils\Helper::getTmpDir();
+
         foreach ($usersToBackup as $username => $userPath) {
             $this->logger->info("--- Starting backup for user: {$username} ---");
             try {
                 $archivePath = $archiveHandler->create($username, $userPath, $isDryRun);
 
                 if ($archivePath) {
-                    if (is_array($archivePath)) {
-                        // Trường hợp backup file trực tiếp trong thư mục gốc
-                        foreach ($archivePath as $filePath) {
-                            foreach ($storages as $storageInfo) {
-                                $this->uploadBackup($storageInfo['storage'], $filePath, $isDryRun, $storageInfo['driver']);
-                            }
-                            $this->cleanupLocal($filePath, $isDryRun);
-                        }
-                    } else {
+                    $archiveFiles = is_array($archivePath) ? $archivePath : [$archivePath];
+                    foreach ($archiveFiles as $filePath) {
+                        $allUploadsOk = true;
                         foreach ($storages as $storageInfo) {
-                            $this->uploadBackup($storageInfo['storage'], $archivePath, $isDryRun, $storageInfo['driver']);
+                            try {
+                                $this->uploadBackup($storageInfo['storage'], $filePath, $isDryRun, $storageInfo['driver']);
+                            } catch (\Throwable $e) {
+                                $allUploadsOk = false;
+                                $this->logger->error("Upload failed for file {$filePath} to remote {$storageInfo['driver']}: " . $e->getMessage());
+                            }
                         }
-                        $this->cleanupLocal($archivePath, $isDryRun);
+                        // Only cleanup if all uploads succeeded and file is in TMP_DIR
+                        if ($allUploadsOk && $this->isInTmpDir($filePath, $tmpDir)) {
+                            $this->cleanupLocal($filePath, $isDryRun);
+                        } else if (!$allUploadsOk) {
+                            $this->logger->warning("File {$filePath} was NOT deleted because not all uploads succeeded.");
+                        } else if (!$this->isInTmpDir($filePath, $tmpDir)) {
+                            $this->logger->info("File {$filePath} is not in TMP_DIR, skipping deletion.");
+                        }
                     }
                 }
             } catch (Throwable $e) {
@@ -120,6 +128,19 @@ class BackupManager
         }
     }
 
+    /**
+     * Check if a file is in TMP_DIR
+     */
+    private function isInTmpDir(string $filePath, string $tmpDir): bool
+    {
+        $realTmp = realpath($tmpDir);
+        $realFile = realpath($filePath);
+        if ($realTmp && $realFile && str_starts_with($realFile, $realTmp)) {
+            return true;
+        }
+        return false;
+    }
+
     private function uploadBackup(Filesystem $storage, string $archivePath, bool $isDryRun, string $driver = ''): void
     {
         $remotePath = ($this->config['remote']['path'] ?? '') . '/' . basename($archivePath);
@@ -130,6 +151,22 @@ class BackupManager
             return;
         }
 
+        // Check if file already exists on remote and has the same size
+        try {
+            if ($storage->fileExists($remotePath)) {
+                $remoteSize = $storage->fileSize($remotePath);
+                $localSize = filesize($archivePath);
+                if ($remoteSize === $localSize) {
+                    $this->logger->info("Remote file '{$remotePath}' already exists with matching size. Skipping upload.");
+                    return;
+                } else {
+                    $this->logger->warning("Remote file '{$remotePath}' exists but size differs (remote: {$remoteSize}, local: {$localSize}). Overwriting.");
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning("Could not check remote file existence: " . $e->getMessage());
+        }
+
         $stream = fopen($archivePath, 'r');
         if ($stream === false) {
             throw new \Exception("Failed to open archive file for reading: {$archivePath}");
@@ -137,8 +174,19 @@ class BackupManager
 
         try {
             $storage->writeStream($remotePath, $stream);
-            $this->logger->info("Upload successful to driver '{$driver}'.");
-        } catch (Throwable $e) {
+            // Check file size after upload
+            $localSize = filesize($archivePath);
+            try {
+                $remoteSize = $storage->fileSize($remotePath);
+            } catch (\Throwable $e) {
+                throw new \Exception("Failed to get remote file size after upload: " . $e->getMessage(), 0, $e);
+            }
+            if ($remoteSize !== $localSize) {
+                $this->logger->error("Remote file size ({$remoteSize}) does not match local file size ({$localSize}) for '{$remotePath}'.");
+                throw new \Exception("Upload failed: remote file size does not match local file size for '{$remotePath}'.");
+            }
+            $this->logger->info("Upload successful to driver '{$driver}'. File size verified: {$localSize} bytes.");
+        } catch (\Throwable $e) {
             throw new \Exception("Failed to upload to remote storage ({$driver}): " . $e->getMessage(), 0, $e);
         } finally {
             if (is_resource($stream)) {

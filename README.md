@@ -42,42 +42,47 @@ Copy the example environment file and edit your settings:
 
 ```bash
 cp .env.example .env
-``` 
+```
 
 Open `.env` and configure:
 
 | Variable                  | Description                                                         | Default             |
 |---------------------------|---------------------------------------------------------------------|---------------------|
-| APP_NAME                  | Application name                                                    | "Hestia Backup"    |
-| APP_ENV                   | Environment (`production` or `development`)                         | `production`        |
-| APP_DEBUG                 | Enable debug mode (`true`/`false`)                                  | `false`             |
-| LOG_LEVEL                 | Minimum log level (`debug`, `info`, `warning`, `error`)             | `info`              |
-| ENCRYPTION_PASSWORD       | Password for AES or GPG encryption (choose a strong secret)         | *REQUIRED*          |
+| BACKUP_PASSWORD           | Password for AES or GPG encryption (choose a strong secret)         | *REQUIRED*          |
 | BACKUP_DIRS               | Comma-separated absolute paths to backup user directories           | `/backup`           |
-| REMOTE_DRIVER             | Storage driver: `s3` or `ftp`                                       | `s3`                |
-| REMOTE_PATH               | Base path or folder in remote storage                               | `backups/`          |
+| BACKUP_COMPRESSION        | Compression method (`none`, `gzip`, `zstd`)                         | `none`              |
+| BACKUP_ENCRYPTION         | Encryption method (`none`, `aes`, `gpg`)                           | `aes`               |
+| REMOTE_DRIVER             | Override to use a single storage driver: `s3`, `b2`, `ftp` or `local` | *Not set*         |
 
 ### S3 Driver Settings
 
 | Variable                  | Description                                                         |
 |---------------------------|---------------------------------------------------------------------|
-| AWS_ACCESS_KEY_ID         | S3 access key                                                       |
-| AWS_SECRET_ACCESS_KEY     | S3 secret key                                                       |
-| AWS_DEFAULT_REGION        | S3 region                                                           |
-| AWS_BUCKET                | S3 bucket name                                                      |
-| AWS_ENDPOINT              | Custom endpoint (for non-AWS providers)                             |
+| S3_KEY                    | S3 access key                                                       |
+| S3_SECRET                 | S3 secret key                                                       |
+| S3_REGION                 | S3 region                                                           |
+| S3_BUCKET                 | S3 bucket name                                                      |
+| S3_ENDPOINT               | Custom endpoint (for non-AWS providers)                             |
+
+### Backblaze B2 Settings
+
+| Variable                  | Description                                                         |
+|---------------------------|---------------------------------------------------------------------|
+| B2_KEY                    | Backblaze B2 application key ID                                     |
+| B2_SECRET                 | Backblaze B2 application key                                        |
+| B2_BUCKET                 | Backblaze B2 bucket name                                            |
+| B2_REGION                 | Backblaze B2 region (optional)                                      |
 
 ### FTP Driver Settings
 
 | Variable                  | Description                                                         |
 |---------------------------|---------------------------------------------------------------------|
 | FTP_HOST                  | FTP server hostname                                                 |
-| FTP_USERNAME              | FTP username                                                        |
-| FTP_PASSWORD              | FTP password                                                        |
-| FTP_PORT                  | FTP port (default `21`)                                              |
-| FTP_ROOT                  | Base directory on FTP server                                        |
-| FTP_SSL                   | `true` or `false` for FTPS                                          |
-| FTP_PASSIVE               | `true` (passive) or `false` (active)                                 |
+| FTP_USER                  | FTP username                                                        |
+| FTP_PASS                  | FTP password                                                        |
+| FTP_ROOT                  | Base directory on FTP server (optional)                             |
+| FTP_SSL                   | `true` or `false` for FTPS (optional)                               |
+| FTP_PASSIVE               | `true` (passive) or `false` (active) (recommended: `true`)          |
 
 ### Rotation Settings
 
@@ -101,45 +106,65 @@ Open `.env` and configure:
 
 | Variable                  | Description                                                    | Default |
 |---------------------------|----------------------------------------------------------------|----------|
-| NOTIFICATION_ENABLED      | Enable notifications                                          | `true`  |
-| NOTIFICATION_CHANNELS     | Comma-separated: `email`, `telegram`                          | `email` |
-| ALERT_THROTTLE_MINUTES    | Cool-down period between alerts                               | `60`    |
+| EMAIL_SMTP_HOST           | SMTP server host                                              | -       |
+| EMAIL_SMTP_USER           | SMTP username                                                 | -       |
+| EMAIL_SMTP_PASS           | SMTP password                                                 | -       |
+| ADMIN_EMAIL               | Email address to receive notifications                        | -       |
+| TELEGRAM_BOT_TOKEN        | Telegram bot token                                            | -       |
+| TELEGRAM_CHAT_ID          | Telegram chat ID                                              | -       |
+| NOTIFY_INTERVAL_MINUTES   | Cool-down period between notifications (minutes)              | `180`   |
 
 #### Email Channel
 
 Configure SMTP settings:
 
 ```ini
-MAIL_MAILER=smtp
-MAIL_HOST=
-MAIL_PORT=
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS=
-MAIL_FROM_NAME=
-MAIL_TO_ADDRESS=
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=your-email@example.com
+EMAIL_SMTP_PASS=your-smtp-password
+EMAIL_SMTP_ENCRYPTION=tls
+ADMIN_EMAIL=admin@example.com
 ```
 
 #### Telegram Channel
 
 ```ini
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_CHAT_ID=your-telegram-chat-id
 ```
+
+#### Other Webhook Options
+
+```ini
+DISCORD_WEBHOOK=your-discord-webhook-url
+SLACK_WEBHOOK=your-slack-webhook-url
+TEAMS_WEBHOOK=your-teams-webhook-url
+GOOGLE_CHAT_WEBHOOK=your-google-chat-webhook-url
+NOTIFY_INTERVAL_MINUTES=180
+```
+
+## Security & Data Integrity
+
+- **Read-Only Guarantee for BACKUP_DIRS**: All files and directories specified in `BACKUP_DIRS` are treated as strictly read-only. The backup system will never modify, delete, move, or overwrite any original file in these directories. All backup, compression, and encryption operations are performed on temporary copies in a dedicated temp directory (`TMP_DIR`). This ensures absolute safety and integrity of your source data.
+- **Automated Tests**: The project includes automated tests to verify that no write, delete, or move operations are ever performed directly in `BACKUP_DIRS`.
+- **Best Practice**: Always set appropriate file system permissions to enforce read-only access for the backup process user on your backup source directories.
 
 ## Usage
 
 ### Run Backup
 
-- **Real backup:**
-  ```bash
-  php run.php
-  ```
-- **Dry-run (simulate):**
-  ```bash
-  php run.php --dry-run
-  ```
+**Real backup:**
+
+```bash
+php run.php
+```
+
+**Dry-run (simulate):**
+
+```bash
+php run.php --dry-run
+```
 
 ### Restore Backup
 

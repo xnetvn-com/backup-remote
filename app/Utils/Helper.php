@@ -134,25 +134,35 @@ class Helper
         $remotes = [];
         // AWS S3 via AWS_ environment variables
         if (!empty($_ENV['AWS_ACCESS_KEY_ID']) && !empty($_ENV['AWS_SECRET_ACCESS_KEY']) && !empty($_ENV['AWS_BUCKET'])) {
-            $remotes[] = [
-                'driver' => 's3',
-                'key' => $_ENV['AWS_ACCESS_KEY_ID'],
-                'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
-                'region' => $_ENV['AWS_DEFAULT_REGION'] ?? '',
-                'bucket' => $_ENV['AWS_BUCKET'],
-                'endpoint' => $_ENV['AWS_ENDPOINT'] ?? null,
-            ];
+            $region = $_ENV['AWS_DEFAULT_REGION'] ?? '';
+            if ($region) {
+                $remotes[] = [
+                    'driver' => 's3',
+                    'key' => $_ENV['AWS_ACCESS_KEY_ID'],
+                    'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
+                    'region' => $region,
+                    'bucket' => $_ENV['AWS_BUCKET'],
+                    'endpoint' => $_ENV['AWS_ENDPOINT'] ?? null,
+                ];
+            } else {
+                error_log('[BackupRemote] Warning: AWS S3 remote detected but missing region. Skipping S3 remote.');
+            }
         }
         // Legacy S3_* variables support
         if (!empty($_ENV['S3_KEY']) && !empty($_ENV['S3_SECRET']) && !empty($_ENV['S3_BUCKET'])) {
-            $remotes[] = [
-                'driver' => 's3',
-                'key' => $_ENV['S3_KEY'],
-                'secret' => $_ENV['S3_SECRET'],
-                'region' => $_ENV['S3_REGION'] ?? '',
-                'bucket' => $_ENV['S3_BUCKET'],
-                'endpoint' => $_ENV['S3_ENDPOINT'] ?? null,
-            ];
+            $region = $_ENV['S3_REGION'] ?? '';
+            if ($region) {
+                $remotes[] = [
+                    'driver' => 's3',
+                    'key' => $_ENV['S3_KEY'],
+                    'secret' => $_ENV['S3_SECRET'],
+                    'region' => $region,
+                    'bucket' => $_ENV['S3_BUCKET'],
+                    'endpoint' => $_ENV['S3_ENDPOINT'] ?? null,
+                ];
+            } else {
+                error_log('[BackupRemote] Warning: S3 remote detected but missing region. Skipping S3 remote.');
+            }
         }
         if (!empty($_ENV['B2_KEY']) && !empty($_ENV['B2_SECRET']) && !empty($_ENV['B2_BUCKET'])) {
             $remotes[] = [
@@ -160,7 +170,7 @@ class Helper
                 'key' => $_ENV['B2_KEY'],
                 'secret' => $_ENV['B2_SECRET'],
                 'bucket' => $_ENV['B2_BUCKET'],
-                'region' => $_ENV['B2_REGION'] ?? '',
+                'region' => $_ENV['B2_REGION'] ?? 'us-west-002',
                 'endpoint' => $_ENV['B2_ENDPOINT'] ?? null,
             ];
         }
@@ -804,5 +814,25 @@ class Helper
         } else {
             throw new \RuntimeException("Unknown or unsupported encryption/compression method: $method");
         }
+    }
+
+    /**
+     * Add .xbk extension to filename before compression/encryption.
+     */
+    public static function addXbkExtension(string $filename): string
+    {
+        if (str_ends_with($filename, '.xbk')) return $filename;
+        return $filename . '.xbk';
+    }
+
+    /**
+     * Remove .xbk extension from filename (if present).
+     */
+    public static function removeXbkExtension(string $filename): string
+    {
+        if (str_ends_with($filename, '.xbk')) {
+            return substr($filename, 0, -4);
+        }
+        return $filename;
     }
 }

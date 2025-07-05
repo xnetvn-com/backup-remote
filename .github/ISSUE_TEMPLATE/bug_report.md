@@ -1,9 +1,9 @@
-# Copyright (c) 2025 xNetVN Inc.
-# Website: https://xnetvn.com/
-# License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
-# Contact: license@xnetvn.net
-#
-# Bug report template
+<!--
+  Copyright (c) 2025 xNetVN Inc.
+  License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+  Contact: license@xnetvn.net
+-->
+
 ---
 name: "Bug Report"
 description: "Report a bug, issue, or unexpected behavior in the system"

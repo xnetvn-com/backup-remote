@@ -28,3 +28,40 @@ storage/logs/
 # Ignore vendor (if not committed)
 /vendor/
 /libs/vendor/
+
+# Ignore environment-specific overrides
+.env.local
+.env.production
+.env.development.local
+.env.production.local
+
+# Ignore PHPUnit result cache and coverage
+.phpunit.cache
+coverage/
+
+# Ignore temporary files and caches
+tmp/
+.cache/
+
+# Ignore lock files
+composer.lock
+
+# Ignore backup files
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# Ignore key files and certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.cert
+
+# Ignore potentially sensitive data files
+*.sql
+*.dump
+*.csv
+*.dat

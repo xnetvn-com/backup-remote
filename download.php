@@ -78,7 +78,7 @@ try {
         $logger->error("Failed to create storage adapter for remote: " . $targetRemote['driver']);
         exit(3);
     }
-    // Quét danh sách file backup hợp lệ
+    // Scan list of valid backup files
     $listing = $storage->listContents('', true);
     $validExt = '(xenc|zst|gz|bz2|xz|zip|7z|tar|gpg)';
     $pattern = "/^([a-zA-Z0-9_.-]+)\\.(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\..*\\.$validExt$/";
@@ -90,7 +90,7 @@ try {
             $backups[$user][$ver][] = $item->path();
         }
     }
-    // Nếu thiếu user hoặc version thì cho chọn
+    // If user or version is missing, prompt for selection
     if (!$username || !isset($backups[$username])) {
         $users = array_keys($backups);
         if (empty($users)) {
@@ -106,16 +106,16 @@ try {
         // Select backup version
         $version = cli_select('Select backup version:', $versions, 0);
     }
-    // Chọn file backup phù hợp (ưu tiên file mới nhất, đúng pattern)
+    // Select the appropriate backup file (prioritize the newest, matching pattern)
     $files = $backups[$username][$version];
-    // Nếu có nhiều file (nén/mã hóa khác nhau), cho chọn
+    // If there are multiple files (different compression/encryption), prompt for selection
     if (count($files) > 1) {
         // Select backup file by compression/encryption format
         $file = cli_select('Select backup file (compression/encryption):', $files, 0);
     } else {
         $file = $files[0];
     }
-    $logger->info("Đang tải file: $file");
+    $logger->info("Downloading file: $file");
     $localFile = rtrim($outdir, '/') . '/' . basename($file);
     $skipDownload = false;
     if (file_exists($localFile)) {
@@ -148,7 +148,7 @@ try {
         fclose($out);
         $logger->info("Downloaded file: $localFile");
     }
-    // Giải mã và giải nén tự động
+    // Auto decrypt and decompress
     // Get encryption password from environment
     $password = Helper::env('ENCRYPTION_PASSWORD');
     $decrypted = $localFile;
@@ -181,14 +181,49 @@ try {
             echo "[ERROR] Zstd decryption failed. Output file may be invalid!\n";
         }
     }
-    // Giải nén nếu cần (chưa implement extraction thực tế)
+    // Extract if needed (automatic extraction for zip, 7z, tar, xz, gz, bz2)
     $final = $decrypted;
-    $extractionNeeded = preg_match('/\.(tar\.gz|tar\.zst|tar\.bz2|tar\.xz|tar|zip|7z)$/', $decrypted);
-    if ($extractionNeeded) {
-        // TODO: implement extraction logic if needed
-        $logger->warning("Automatic extraction not implemented for archive files. Archive remains unchanged.");
-        echo "[WARNING] Backup file is an archive (tar/zip/7z...). Please extract manually if needed.\n";
-        $logger->info("Backup archive ready: $decrypted");
+    $extracted = false;
+    $extractedFile = null;
+    if (preg_match('/\.(zip|7z)$/', $decrypted, $m)) {
+        $base = preg_replace('/\.(zip|7z)$/', '', $decrypted);
+        if ($m[1] === 'zip') {
+            $ok = Helper::zipDecompressFile($decrypted, $base);
+            if ($ok) {
+                $logger->info("ZIP extracted: $base");
+                $final = $base;
+                $extracted = true;
+                $extractedFile = $base;
+            } else {
+                $logger->error("ZIP extraction failed: $decrypted");
+                echo "[ERROR] ZIP extraction failed. Output file may be invalid!\n";
+            }
+        } elseif ($m[1] === '7z') {
+            $ok = Helper::sevenZipDecompressFile($decrypted, $base);
+            if ($ok) {
+                $logger->info("7z extracted: $base");
+                $final = $base;
+                $extracted = true;
+                $extractedFile = $base;
+            } else {
+                $logger->error("7z extraction failed: $decrypted");
+                echo "[ERROR] 7z extraction failed. Output file may be invalid!\n";
+            }
+        }
+    } elseif (preg_match('/\.(tar\.gz|tar\.bz2|tar\.xz|tar)$/', $decrypted, $m)) {
+        // TODO: implement tar extraction if needed
+        $logger->warning("Automatic extraction for tar archives not implemented. Archive remains unchanged.");
+        echo "[WARNING] Backup file is a tar archive. Please extract manually if needed.\n";
+    }
+    // After extraction, if file has .xbk extension, rename back to original
+    if (str_ends_with($final, '.xbk')) {
+        $original = \App\Utils\Helper::removeXbkExtension($final);
+        if (@rename($final, $original)) {
+            $logger->info("Renamed .xbk file back to original: $original");
+            $final = $original;
+        } else {
+            $logger->warning("Failed to rename .xbk file back to original: $final");
+        }
     }
     $logger->info("Backup file for user=$username, version=$version is ready at $final");
     clearstatcache();

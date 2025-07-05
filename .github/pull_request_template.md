@@ -1,20 +1,33 @@
-# Copyright (c) 2025 xNetVN Inc.
-# Website: https://xnetvn.com/
-# License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
-# Contact: license@xnetvn.net
-#
-# Pull Request Template - xNetVN Inc.
+# xNetVN PHP Backup Remote
 
-## Change Description
-<!-- Summarize the changes, reasons, and link to related Issue -->
+<!--
+  Copyright (c) 2025 xNetVN Inc.
+  License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+-->
+
+## Description
+
+Provide a concise description of your changes and the problem they solve.
+
+## Related Issue
+
+Closes # (issue number)
+
+## Type of Change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
+- [ ] Documentation update
 
 ## Checklist
-- [ ] Code style, lint, and tests have been checked and passed
-- [ ] Related documentation has been updated/modified
-- [ ] No secrets, build files, or logs are committed
-- [ ] Security checks (SAST, secret scan, dependency scan) have been performed
 
-## Screenshots (if any)
+- [ ] Code follows project style guidelines (linting, formatting)
+- [ ] All existing and new tests passed
+- [ ] Documentation updated (README, CONTRIBUTING, etc.)
+- [ ] No secrets or sensitive data committed
+- [ ] Security scans and dependency checks passed
 
-## Contact
-- Email: license@xnetvn.net
+## Testing & Validation
+
+Describe how the changes were tested and provide logs or screenshots if applicable.

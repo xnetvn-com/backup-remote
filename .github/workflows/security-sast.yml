@@ -1,0 +1,35 @@
+# Copyright (c) 2025 xNetVN Inc.
+# Website: https://xnetvn.com/
+# License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+# Contact: license@xnetvn.net
+
+name: Security & SAST
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  sast:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Install dependencies
+        run: composer install --no-dev --optimize-autoloader
+      - name: Run PHPStan (static analysis)
+        run: ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress --level=max app/
+      - name: Scan for dangerous file operations in BACKUP_DIRS
+        run: |
+          if grep -rE --include='*.php' '(unlink|rename|copy|file_put_contents|fopen|write|delete|rmdir)\s*\(\s*\$userPath|\$backupDir|\$config\[\'backup_dirs\'\]' app/; then
+            echo "[SECURITY] Potential dangerous file operation detected in BACKUP_DIRS!" && exit 1;
+          fi
+      - name: Run PHPUnit
+        run: ./libs/vendor/bin/phpunit --configuration=phpunit.xml
