@@ -137,9 +137,16 @@ BACKUP_PASSWORD=your-super-secret-encryption-password
 BACKUP_DIRS=/backup,/home,/var/www
 BACKUP_COMPRESSION=gzip   # Options: none, gzip, zstd, bzip2, xz, zip, 7z
 BACKUP_COMPRESSION_LEVEL=6
-BACKUP_ENCRYPTION=aes     # Options: none, aes, gpg
+BACKUP_ENCRYPTION=aes     # Options: none, aes, gpg, zip, 7z
 BACKUP_ENCRYPTION_KEY_PATH=/path/to/public.key # For GPG (optional)
 TMP_DIR=/tmp/php-backup-remote
+
+# Advanced compression and encryption combinations:
+# - BACKUP_COMPRESSION=7z + BACKUP_ENCRYPTION=7z: Uses 7z CLI for both compression and encryption in one step
+# - BACKUP_COMPRESSION=zip + BACKUP_ENCRYPTION=zip: Uses zip CLI with AES-256 encryption in one step
+# - BACKUP_COMPRESSION=7z + BACKUP_ENCRYPTION=none: Uses 7z CLI for compression only
+# - BACKUP_COMPRESSION=zip + BACKUP_ENCRYPTION=none: Uses zip CLI for compression only
+# - Separate steps: BACKUP_COMPRESSION=gzip + BACKUP_ENCRYPTION=aes (compress first, then encrypt)
 
 # Rotation & retention
 ROTATION_ENABLED=true
@@ -240,12 +247,25 @@ Open `.env` and configure:
 |---------------------------|---------------------------------------------------------------------|---------------------|
 | BACKUP_PASSWORD           | Password for AES or GPG encryption (choose a strong secret)         | *REQUIRED*          |
 | BACKUP_DIRS               | Comma-separated absolute paths to backup user directories           | `/backup`           |
-| BACKUP_COMPRESSION        | Compression method (`none`, `gzip`, `zstd`)                         | `none`              |
+| BACKUP_COMPRESSION        | Compression method (`none`, `gzip`, `zstd`, `bzip2`, `xz`, `zip`, `7z`) | `none`              |
 | BACKUP_COMPRESSION_LEVEL  | Compression level (1-9, default 6)                                  | `6`                  |
-| BACKUP_ENCRYPTION         | Encryption method (`none`, `aes`, `gpg`)                           | `aes`               |
+| BACKUP_ENCRYPTION         | Encryption method (`none`, `aes`, `gpg`, `zip`, `7z`)              | `aes`               |
 | BACKUP_ENCRYPTION_KEY_PATH| Path to public key for GPG encryption (optional)                   | *Not set*         |
 | REMOTE_DRIVER             | Override to use a single storage driver: `s3`, `b2`, `ftp` or `local` | *Not set*         |
 | TMP_DIR                   | Temporary directory for backup operations                            | `/tmp/php-backup-remote` |
+
+### Compression & Encryption CLI Usage
+
+| Configuration                                | CLI Tools Used              | Description                                    |
+|----------------------------------------------|------------------------------|------------------------------------------------|
+| `BACKUP_COMPRESSION=7z` + `BACKUP_ENCRYPTION=7z` | `7z a` (single step)    | 7z CLI compresses and encrypts in one command |
+| `BACKUP_COMPRESSION=zip` + `BACKUP_ENCRYPTION=zip` | `zip -e` (single step) | zip CLI compresses with traditional encryption |
+| `BACKUP_COMPRESSION=7z` + `BACKUP_ENCRYPTION=none` | `7z a` (compression only) | 7z CLI for compression only                  |
+| `BACKUP_COMPRESSION=zip` + `BACKUP_ENCRYPTION=none` | `zip` (compression only) | zip CLI for compression only                 |
+| `BACKUP_COMPRESSION=gzip` + `BACKUP_ENCRYPTION=aes` | `gzip` + `openssl`     | Separate compression and encryption steps     |
+| `BACKUP_COMPRESSION=zstd` + `BACKUP_ENCRYPTION=gpg` | `zstd` + `gpg`         | Separate compression and encryption steps     |
+
+**Note**: The zip CLI uses traditional password-based encryption (not AES-256). For stronger encryption, use 7z or separate AES encryption.
 
 ### S3 Driver Settings
 

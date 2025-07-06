@@ -28,7 +28,7 @@ reports/
 
 # Ignore vendor (if not committed)
 #/vendor/
-#/libs/vendor/
+#libs/vendor/
 
 # Ignore environment-specific overrides
 .env.local

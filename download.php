@@ -57,39 +57,50 @@ function cli_select($title, $options, $default = 0) {
 }
 
 try {
-    $remotes = Helper::detectAllRemotes();
-    $targetRemote = null;
-    if ($remote) {
-        foreach ($remotes as $r) {
-            if ($r['driver'] === $remote) {
-                $targetRemote = $r;
-                break;
-            }
-        }
-    } else {
-        $targetRemote = $remotes[0] ?? null;
-    }
-    if (!$targetRemote) {
-        $logger->error("No valid remote storage found.");
-        exit(2);
-    }
-    $storage = StorageFactory::create($targetRemote['driver'], $targetRemote);
-    if (!$storage) {
-        $logger->error("Failed to create storage adapter for remote: " . $targetRemote['driver']);
-        exit(3);
-    }
-    // Scan list of valid backup files
-    $listing = $storage->listContents('', true);
-    // Updated pattern to recognize .xbk files with compression and encryption
-    $pattern = "/^([a-zA-Z0-9_.-]+)\\.(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\.tar(?:\\.xbk)?(?:\\.(gz|bz2|xz|zst|zip|7z))?(?:\\.(aes|gpg))?$/";
-    $backups = [];
-    foreach ($listing as $item) {
-        if ($item->isFile() && preg_match($pattern, $item->path(), $m)) {
-            $user = $m[1];
-            $ver = $m[2];
-            $backups[$user][$ver][] = $item->path();
-        }
-    }
+    $remotes = Helper::detectAllRemotes();  
+    // Create storage adapters for all remotes (or filter by --remote if provided)  
+    $storages = [];  
+    foreach ($remotes as $r) {  
+        if ($remote && $r['driver'] !== $remote) {  
+            continue;  
+        }  
+        $st = StorageFactory::create($r['driver'], $r);  
+        if ($st) {  
+            $storages[] = ['driver' => $r['driver'], 'storage' => $st];  
+        } else {  
+            $logger->warning("Failed to create storage adapter for remote: {$r['driver']}");  
+        }  
+    }  
+    if (empty($storages)) {  
+        $logger->error("No valid remote storage adapters available.");  
+        exit(2);  
+    }  
+    // Aggregate contents from all remotes  
+    $listing = [];  
+    foreach ($storages as $info) {  
+        try {  
+            $items = $info['storage']->listContents('', true);  
+        } catch (Throwable $e) {  
+            $logger->warning("Could not list contents on '{$info['driver']}': " . $e->getMessage());  
+            continue;  
+        }  
+        foreach ($items as $item) {  
+            if ($item->isFile()) {  
+                $listing[] = $item->path();  
+            }  
+        }  
+    }  
+    // Scan list of valid backup files across all remotes  
+    // Updated pattern to recognize .xbk files with single or double compression+encryption extensions  
+    $pattern = "/^([a-zA-Z0-9_.-]+)\\.(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\.tar\\.xbk(?:\\.(?:gz|bz2|xz|zst|zip|7z)(?:\\.(?:gz|bz2|xz|zst|zip|7z))?)?(?:\\.(?:aes|gpg))?$/";  
+    $backups = [];  
+    foreach ($listing as $path) {  
+        if (preg_match($pattern, $path, $m)) {  
+            $user = $m[1];  
+            $ver = $m[2];  
+            $backups[$user][$ver][] = $path;  
+        }  
+    }  
     // If user or version is missing, prompt for selection
     if (!$username || !isset($backups[$username])) {
         $users = array_keys($backups);
@@ -111,9 +122,25 @@ try {
     // If there are multiple files (different compression/encryption), prompt for selection
     if (count($files) > 1) {
         // Select backup file by compression/encryption format
-        $file = cli_select('Select backup file (compression/encryption):', $files, 0);
+        $file = cli_select('Select backup file (compression/xbk format):', $files, 0);
     } else {
         $file = $files[0];
+    }
+    // Determine which remote adapter holds the selected file
+    $storage = null;
+    foreach ($storages as $info) {
+        try {
+            if ($info['storage']->fileExists($file)) {
+                $storage = $info['storage'];
+                break;
+            }
+        } catch (Throwable $e) {
+            // ignore and continue
+        }
+    }
+    if (!$storage) {
+        $logger->error("Selected backup file {$file} not found on any remote storage.");
+        exit(5);
     }
     $logger->info("Downloading file: $file");
     $localFile = rtrim($outdir, '/') . '/' . basename($file);

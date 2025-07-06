@@ -1133,8 +1133,9 @@ class Helper
             return false;
         }
         
+        // Add '-y' for automatic yes to prompts and proper piping
         $cmd = [
-            '7z', 'e', 
+            '7z', 'e', '-y', 
             "-p$password",
             '-so', // output to stdout
             $inputFile
@@ -1145,8 +1146,9 @@ class Helper
             return false;
         }
         
+        // Use pipe mode so child writes to stdout/stderr and parent reads
         $descriptors = [
-            1 => ['pipe', 'w'], // stdout - corrected from 'r' to 'w'
+            1 => ['pipe', 'w'], // stdout
             2 => ['pipe', 'w'], // stderr
         ];
         $pipes = [];
@@ -1188,14 +1190,28 @@ class Helper
             return false;
         }
         $level = max(0, min(9, $level));
+        
+        // Create temporary directory for zip operation
+        $tmpDir = self::getTmpDir() . '/zip_encrypt_' . uniqid();
+        if (!mkdir($tmpDir, 0700, true)) {
+            return false;
+        }
+        
+        $baseName = basename($inputFile);
+        $tmpInput = $tmpDir . '/' . $baseName;
+        if (!copy($inputFile, $tmpInput)) {
+            rmdir($tmpDir);
+            return false;
+        }
+        
         $cmd = [
             'zip',
+            '-j', // junk paths
             "-$level", // compression level
-            '-e', // encrypt
-            '-Z', 'aes-256', // use AES-256 encryption
+            '-e', // encrypt (use traditional encryption)
             '-P', $password, // password
             $outputFile,
-            $inputFile
+            $tmpInput
         ];
         
         $descriptors = [
@@ -1205,6 +1221,8 @@ class Helper
         $pipes = [];
         $proc = proc_open($cmd, $descriptors, $pipes);
         if (!is_resource($proc)) {
+            unlink($tmpInput);
+            rmdir($tmpDir);
             return false;
         }
         
@@ -1215,6 +1233,11 @@ class Helper
         fclose($pipes[2]);
         
         $exit = proc_close($proc);
+        
+        // Cleanup
+        unlink($tmpInput);
+        rmdir($tmpDir);
+        
         return $exit === 0 && is_file($outputFile);
     }
 
@@ -1358,13 +1381,15 @@ class Helper
         
         // 7z can compress and encrypt in one step
         if (($compression === '7z' || $compression === '7zip') && ($encryption === '7z' || $encryption === '7zip')) {
-            $result .= '.7z';
+            // add both .7z for compression and .7z for encryption
+            $result .= '.7z.7z';
             return $result;
         }
         
         // zip can compress and encrypt in one step
         if ($compression === 'zip' && $encryption === 'zip') {
-            $result .= '.zip';
+            // add both .zip for compression and .zip for encryption
+            $result .= '.zip.zip';
             return $result;
         }
         
@@ -1380,10 +1405,12 @@ class Helper
                 default => 'gz',
             };
             $result .= '.' . $compExt;
+        } else {
+            // No compression, keep .xbk marker
         }
-        
-        // Add encryption extension for separate encryption methods
-        if ($encryption !== 'none' && !in_array($encryption, ['7z', '7zip', 'zip'])) {
+         
+         // Add encryption extension for separate encryption methods
+         if ($encryption !== 'none' && !in_array($encryption, ['7z', '7zip', 'zip'])) {
             $encExt = match ($encryption) {
                 'aes', 'openssl' => 'aes',
                 'gpg', 'gpg2', 'gnupg' => 'gpg',
@@ -1433,7 +1460,19 @@ class Helper
         // Parse extensions after .xbk
         if ($extensions) {
             $extParts = explode('.', $extensions);
-            
+            // Special case: same ext twice (7z or zip) indicates combined compress+encrypt
+            if (count($extParts) === 2 && $extParts[0] === $extParts[1] && in_array(strtolower($extParts[0]), ['7z', 'zip'])) {
+                $method = strtolower($extParts[0]);
+                $compression = $method === '7z' ? '7zip' : 'zip';
+                $encryption = $compression;
+                // Return parsed values
+                return [
+                    'original' => $original,
+                    'compression' => $compression,
+                    'encryption' => $encryption,
+                    'hasXbk' => true
+                ];
+            }
             // Special handling for combined compression+encryption formats
             if (count($extParts) === 1) {
                 $ext = strtolower($extParts[0]);
