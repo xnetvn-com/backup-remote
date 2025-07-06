@@ -192,9 +192,11 @@ try {
             ($fileInfo['encryption'] === '7zip' || $fileInfo['encryption'] === '7z')) {
             // 7z combined: decompress and decrypt in one step
             $finalFile = rtrim($outdir, '/') . '/' . $fileInfo['original'];
+            $archiveFile = $currentFile;
             $ok = Helper::sevenZipDecompressDecryptFile($currentFile, $finalFile, $password);
             if ($ok) {
-                $logger->info("Decompressed and decrypted {$currentFile} to {$finalFile} using 7z");
+                $logger->info("Decompressed and decrypted {$archiveFile} to {$finalFile} using 7z");
+                @unlink($archiveFile); // cleanup intermediate archive
                 $currentFile = $finalFile;
             } else {
                 $logger->error("7z decompression/decryption failed. Check password or source file.");
@@ -203,9 +205,11 @@ try {
         } elseif ($fileInfo['compression'] === 'zip' && $fileInfo['encryption'] === 'zip') {
             // zip combined: decompress and decrypt in one step
             $finalFile = rtrim($outdir, '/') . '/' . $fileInfo['original'];
+            $archiveFile = $currentFile;
             $ok = Helper::zipDecompressDecryptFile($currentFile, $finalFile, $password);
             if ($ok) {
-                $logger->info("Decompressed and decrypted {$currentFile} to {$finalFile} using zip");
+                $logger->info("Decompressed and decrypted {$archiveFile} to {$finalFile} using zip");
+                @unlink($archiveFile); // cleanup intermediate archive
                 $currentFile = $finalFile;
             } else {
                 $logger->error("zip decompression/decryption failed. Check password or source file.");
@@ -227,6 +231,7 @@ try {
                     
                     if ($decryptOk) {
                         $logger->info("Decrypted {$currentFile} to {$decryptedFile} using {$fileInfo['encryption']}");
+                        @unlink($currentFile); // cleanup encrypted file
                         $currentFile = $decryptedFile;
                     } else {
                         $logger->error("{$fileInfo['encryption']} decryption failed. Check password or source file.");
@@ -252,6 +257,7 @@ try {
                     
                     if ($decompressOk) {
                         $logger->info("Decompressed {$currentFile} to {$decompressedFile} using {$fileInfo['compression']}");
+                        @unlink($currentFile); // cleanup compressed file
                         $currentFile = $decompressedFile;
                     } else {
                         $logger->error("{$fileInfo['compression']} decompression failed.");
