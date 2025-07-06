@@ -80,8 +80,8 @@ try {
     }
     // Scan list of valid backup files
     $listing = $storage->listContents('', true);
-    $validExt = '(xenc|zst|gz|bz2|xz|zip|7z|tar|gpg)';
-    $pattern = "/^([a-zA-Z0-9_.-]+)\\.(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\..*\\.$validExt$/";
+    // Updated pattern to recognize .xbk files with compression and encryption
+    $pattern = "/^([a-zA-Z0-9_.-]+)\\.(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\.tar(?:\\.xbk)?(?:\\.(gz|bz2|xz|zst|zip|7z))?(?:\\.(aes|gpg))?$/";
     $backups = [];
     foreach ($listing as $item) {
         if ($item->isFile() && preg_match($pattern, $item->path(), $m)) {
@@ -148,81 +148,188 @@ try {
         fclose($out);
         $logger->info("Downloaded file: $localFile");
     }
-    // Auto decrypt and decompress
+    // Auto decrypt and decompress using .xbk filename analysis
     // Get encryption password from environment
-    $password = Helper::env('ENCRYPTION_PASSWORD');
-    $decrypted = $localFile;
-    $decryptOk = true;
-    if (str_ends_with($localFile, '.xenc')) {
-        $decrypted = preg_replace('/\.xenc$/', '', $localFile);
-        $decryptOk = Helper::decryptFile($localFile, $decrypted, $password);
-        if ($decryptOk) {
-            $logger->info("Decrypted: $decrypted");
+    $password = Helper::env('ENCRYPTION_PASSWORD', Helper::env('BACKUP_PASSWORD'));
+    
+    // Parse the filename to understand processing steps
+    $fileInfo = Helper::parseXbkFilename($localFile);
+    $currentFile = $localFile;
+    
+    $logger->info("Processing backup file: {$localFile}");
+    $logger->info("File analysis - Original: {$fileInfo['original']}, Compression: {$fileInfo['compression']}, Encryption: {$fileInfo['encryption']}, Has XBK: " . ($fileInfo['hasXbk'] ? 'yes' : 'no'));
+    
+    if ($fileInfo['hasXbk']) {
+        // Handle combined compression+encryption methods first
+        if (($fileInfo['compression'] === '7zip' || $fileInfo['compression'] === '7z') && 
+            ($fileInfo['encryption'] === '7zip' || $fileInfo['encryption'] === '7z')) {
+            // 7z combined: decompress and decrypt in one step
+            $finalFile = rtrim($outdir, '/') . '/' . $fileInfo['original'];
+            $ok = Helper::sevenZipDecompressDecryptFile($currentFile, $finalFile, $password);
+            if ($ok) {
+                $logger->info("Decompressed and decrypted {$currentFile} to {$finalFile} using 7z");
+                $currentFile = $finalFile;
+            } else {
+                $logger->error("7z decompression/decryption failed. Check password or source file.");
+                echo "[ERROR] 7z decompression/decryption failed. Output file may be invalid!\n";
+            }
+        } elseif ($fileInfo['compression'] === 'zip' && $fileInfo['encryption'] === 'zip') {
+            // zip combined: decompress and decrypt in one step
+            $finalFile = rtrim($outdir, '/') . '/' . $fileInfo['original'];
+            $ok = Helper::zipDecompressDecryptFile($currentFile, $finalFile, $password);
+            if ($ok) {
+                $logger->info("Decompressed and decrypted {$currentFile} to {$finalFile} using zip");
+                $currentFile = $finalFile;
+            } else {
+                $logger->error("zip decompression/decryption failed. Check password or source file.");
+                echo "[ERROR] zip decompression/decryption failed. Output file may be invalid!\n";
+            }
         } else {
-            $logger->error("AES decryption failed. Check password or source file.");
-            echo "[ERROR] AES decryption failed. Output file may be invalid!\n";
+            // Separate steps: decrypt first, then decompress
+            
+            // Step 1: Decrypt if needed (reverse order - decrypt first)
+            if ($fileInfo['encryption'] !== 'none') {
+                $extension = '.' . $fileInfo['encryption'];
+                if (str_ends_with($currentFile, $extension)) {
+                    $decryptedFile = preg_replace('/' . preg_quote($extension, '/') . '$/', '', $currentFile);
+                    $decryptOk = match ($fileInfo['encryption']) {
+                        'gpg' => Helper::gpgDecryptFile($currentFile, $decryptedFile, $password),
+                        'aes' => Helper::decryptFile($currentFile, $decryptedFile, $password),
+                        default => false,
+                    };
+                    
+                    if ($decryptOk) {
+                        $logger->info("Decrypted {$currentFile} to {$decryptedFile} using {$fileInfo['encryption']}");
+                        $currentFile = $decryptedFile;
+                    } else {
+                        $logger->error("{$fileInfo['encryption']} decryption failed. Check password or source file.");
+                        echo "[ERROR] {$fileInfo['encryption']} decryption failed. Output file may be invalid!\n";
+                    }
+                }
+            }
+            
+            // Step 2: Decompress if needed (after decryption)
+            if ($fileInfo['compression'] !== 'none') {
+                $extension = '.' . ($fileInfo['compression'] === '7zip' ? '7z' : $fileInfo['compression']);
+                if (str_ends_with($currentFile, $extension)) {
+                    $decompressedFile = preg_replace('/' . preg_quote($extension, '/') . '$/', '', $currentFile);
+                    $decompressOk = match ($fileInfo['compression']) {
+                        'gz', 'gzip' => Helper::gzipDecompressFile($currentFile, $decompressedFile),
+                        'bz2', 'bzip2' => Helper::bzip2DecompressFile($currentFile, $decompressedFile),
+                        'xz' => Helper::xzDecompressFile($currentFile, $decompressedFile),
+                        'zst', 'zstd' => Helper::zstdDecompressFile($currentFile, $decompressedFile),
+                        'zip' => Helper::zipDecompressFile($currentFile, $decompressedFile),
+                        '7zip', '7z' => Helper::sevenZipDecompressFile($currentFile, $decompressedFile),
+                        default => false,
+                    };
+                    
+                    if ($decompressOk) {
+                        $logger->info("Decompressed {$currentFile} to {$decompressedFile} using {$fileInfo['compression']}");
+                        $currentFile = $decompressedFile;
+                    } else {
+                        $logger->error("{$fileInfo['compression']} decompression failed.");
+                        echo "[ERROR] {$fileInfo['compression']} decompression failed. Output file may be invalid!\n";
+                    }
+                }
+            }
         }
-    } elseif (str_ends_with($localFile, '.gpg')) {
-        $decrypted = preg_replace('/\.gpg$/', '', $localFile);
-        $decryptOk = Helper::gpgDecryptFile($localFile, $decrypted, $password);
-        if ($decryptOk) {
-            $logger->info("GPG decrypted: $decrypted");
-        } else {
-            $logger->error("GPG decryption failed. Check password or source file.");
-            echo "[ERROR] GPG decryption failed. Output file may be invalid!\n";
-        }
-    } elseif (str_ends_with($localFile, '.zst')) {
-        $decrypted = preg_replace('/\.zst$/', '', $localFile);
-        $decryptOk = Helper::zstdDecryptFile($localFile, $decrypted, $password);
-        if ($decryptOk) {
-            $logger->info("Zstd decrypted: $decrypted");
-        } else {
-            $logger->error("Zstd decryption failed. Check password or source file.");
-            echo "[ERROR] Zstd decryption failed. Output file may be invalid!\n";
+        
+        // Step 3: Remove .xbk marker to get original filename (for .xbk files)
+        if (str_contains($currentFile, '.xbk')) {
+            $originalFilename = $fileInfo['original'];
+            $originalPath = dirname($currentFile) . '/' . $originalFilename;
+            if (@rename($currentFile, $originalPath)) {
+                $logger->info("Restored original filename: {$originalFilename}");
+                $currentFile = $originalPath;
+            } else {
+                $logger->warning("Failed to restore original filename, keeping: {$currentFile}");
+            }
         }
     }
-    // Extract if needed (automatic extraction for zip, 7z, tar, xz, gz, bz2)
-    $final = $decrypted;
-    $extracted = false;
-    $extractedFile = null;
-    if (preg_match('/\.(zip|7z)$/', $decrypted, $m)) {
-        $base = preg_replace('/\.(zip|7z)$/', '', $decrypted);
-        if ($m[1] === 'zip') {
-            $ok = Helper::zipDecompressFile($decrypted, $base);
-            if ($ok) {
-                $logger->info("ZIP extracted: $base");
-                $final = $base;
-                $extracted = true;
-                $extractedFile = $base;
+    
+    // Gán currentFile vào final để xử lý tiếp
+    $final = $currentFile;
+    
+    // Legacy processing for non-.xbk files (backward compatibility)
+    if (!$fileInfo['hasXbk']) {
+        $logger->info("Processing legacy (non-.xbk) file: {$localFile}");
+        $decrypted = $localFile;
+        $decryptOk = true;
+        if (str_ends_with($localFile, '.xenc')) {
+            $decrypted = preg_replace('/\.xenc$/', '', $localFile);
+            $decryptOk = Helper::decryptFile($localFile, $decrypted, $password);
+            if ($decryptOk) {
+                $logger->info("Decrypted: $decrypted");
             } else {
-                $logger->error("ZIP extraction failed: $decrypted");
-                echo "[ERROR] ZIP extraction failed. Output file may be invalid!\n";
+                $logger->error("AES decryption failed. Check password or source file.");
+                echo "[ERROR] AES decryption failed. Output file may be invalid!\n";
             }
-        } elseif ($m[1] === '7z') {
-            $ok = Helper::sevenZipDecompressFile($decrypted, $base);
-            if ($ok) {
-                $logger->info("7z extracted: $base");
-                $final = $base;
-                $extracted = true;
-                $extractedFile = $base;
+        } elseif (str_ends_with($localFile, '.gpg')) {
+            $decrypted = preg_replace('/\.gpg$/', '', $localFile);
+            $decryptOk = Helper::gpgDecryptFile($localFile, $decrypted, $password);
+            if ($decryptOk) {
+                $logger->info("GPG decrypted: $decrypted");
             } else {
-                $logger->error("7z extraction failed: $decrypted");
-                echo "[ERROR] 7z extraction failed. Output file may be invalid!\n";
+                $logger->error("GPG decryption failed. Check password or source file.");
+                echo "[ERROR] GPG decryption failed. Output file may be invalid!\n";
+            }
+        } elseif (str_ends_with($localFile, '.zst')) {
+            $decrypted = preg_replace('/\.zst$/', '', $localFile);
+            $decryptOk = Helper::zstdDecryptFile($localFile, $decrypted, $password);
+            if ($decryptOk) {
+                $logger->info("Zstd decrypted: $decrypted");
+            } else {
+                $logger->error("Zstd decryption failed. Check password or source file.");
+                echo "[ERROR] Zstd decryption failed. Output file may be invalid!\n";
             }
         }
-    } elseif (preg_match('/\.(tar\.gz|tar\.bz2|tar\.xz|tar)$/', $decrypted, $m)) {
-        // TODO: implement tar extraction if needed
-        $logger->warning("Automatic extraction for tar archives not implemented. Archive remains unchanged.");
-        echo "[WARNING] Backup file is a tar archive. Please extract manually if needed.\n";
-    }
-    // After extraction, if file has .xbk extension, rename back to original
-    if (str_ends_with($final, '.xbk')) {
-        $original = \App\Utils\Helper::removeXbkExtension($final);
-        if (@rename($final, $original)) {
-            $logger->info("Renamed .xbk file back to original: $original");
-            $final = $original;
+        
+        // Extract if needed (automatic extraction for zip, 7z, tar, xz, gz, bz2)
+        $extracted = false;
+        $extractedFile = null;
+        if (preg_match('/\.(zip|7z)$/', $decrypted, $m)) {
+            $base = preg_replace('/\.(zip|7z)$/', '', $decrypted);
+            if ($m[1] === 'zip') {
+                $ok = Helper::zipDecompressFile($decrypted, $base);
+                if ($ok) {
+                    $logger->info("ZIP extracted: $base");
+                    $final = $base;
+                    $extracted = true;
+                    $extractedFile = $base;
+                } else {
+                    $logger->error("ZIP extraction failed: $decrypted");
+                    echo "[ERROR] ZIP extraction failed. Output file may be invalid!\n";
+                }
+            } elseif ($m[1] === '7z') {
+                $ok = Helper::sevenZipDecompressFile($decrypted, $base);
+                if ($ok) {
+                    $logger->info("7z extracted: $base");
+                    $final = $base;
+                    $extracted = true;
+                    $extractedFile = $base;
+                } else {
+                    $logger->error("7z extraction failed: $decrypted");
+                    echo "[ERROR] 7z extraction failed. Output file may be invalid!\n";
+                }
+            }
+        } elseif (preg_match('/\.(tar\.gz|tar\.bz2|tar\.xz|tar)$/', $decrypted, $m)) {
+            // TODO: implement tar extraction if needed
+            $logger->warning("Automatic extraction for tar archives not implemented. Archive remains unchanged.");
+            echo "[WARNING] Backup file is a tar archive. Please extract manually if needed.\n";
+            $final = $decrypted;
         } else {
-            $logger->warning("Failed to rename .xbk file back to original: $final");
+            $final = $decrypted;
+        }
+        
+        // After extraction, if file has .xbk extension, rename back to original
+        if (str_ends_with($final, '.xbk')) {
+            $original = \App\Utils\Helper::removeXbkExtension($final);
+            if (@rename($final, $original)) {
+                $logger->info("Renamed .xbk file back to original: $original");
+                $final = $original;
+            } else {
+                $logger->warning("Failed to rename .xbk file back to original: $final");
+            }
         }
     }
     $logger->info("Backup file for user=$username, version=$version is ready at $final");

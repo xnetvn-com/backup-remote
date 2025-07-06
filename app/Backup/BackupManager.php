@@ -108,9 +108,9 @@ class BackupManager
                         // Only cleanup if all uploads succeeded and file is in TMP_DIR
                         if ($allUploadsOk && $this->isInTmpDir($filePath, $tmpDir)) {
                             $this->cleanupLocal($filePath, $isDryRun);
-                        } else if (!$allUploadsOk) {
+                        } elseif (!$allUploadsOk) {
                             $this->logger->warning("File {$filePath} was NOT deleted because not all uploads succeeded.");
-                        } else if (!$this->isInTmpDir($filePath, $tmpDir)) {
+                        } elseif (!$this->isInTmpDir($filePath, $tmpDir)) {
                             $this->logger->info("File {$filePath} is not in TMP_DIR, skipping deletion.");
                         }
                     }
@@ -127,7 +127,7 @@ class BackupManager
             $this->performRotation($storageInfo['storage'], $isDryRun, $storageInfo['driver']);
         }
 
-        // Cleanup toàn bộ TMP_DIR sau khi backup xong cho tất cả user
+        // Cleanup the entire TMP_DIR after completing the backup for all users
         $this->cleanupTmpDir($tmpDir, $isDryRun);
     }
 
@@ -232,7 +232,7 @@ class BackupManager
     }
 
     /**
-     * Dọn dẹp toàn bộ file/tệp con trong TMP_DIR (trừ file lock hoặc file đang sử dụng).
+     * Cleanup all files/subdirectories in TMP_DIR (except lock files or files currently in use).
      */
     private function cleanupTmpDir(string $tmpDir, bool $isDryRun): void
     {
@@ -241,7 +241,9 @@ class BackupManager
             $this->logger->info('[DRY-RUN] Skipping TMP_DIR cleanup.');
             return;
         }
-        if (!is_dir($tmpDir)) return;
+        if (!is_dir($tmpDir)) {
+            return;
+        }
         $lockFile = $tmpDir . '/.backup.lock';
         $files = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($tmpDir, \FilesystemIterator::SKIP_DOTS),
@@ -249,7 +251,9 @@ class BackupManager
         );
         foreach ($files as $file) {
             $path = $file->getRealPath();
-            if ($path === false || $path === $lockFile) continue;
+            if ($path === false || $path === $lockFile) {
+                continue;
+            }
             if ($file->isFile()) {
                 @unlink($path);
             } elseif ($file->isDir()) {

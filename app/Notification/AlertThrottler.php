@@ -31,9 +31,41 @@ class AlertThrottler
         return (time() - $last) > $this->interval * 60;
     }
 
-    public function markSent($channel)
+    /**
+     * Mark that a notification was sent on a channel (thread-safe implementation)
+     * SECURITY FIX: Added proper file locking to prevent race conditions
+     */
+    public function markSent($channel): void
     {
         $this->state[$channel] = time();
-        file_put_contents($this->stateFile, json_encode($this->state));
+        $this->writeStateFileSafely();
+    }
+
+    /**
+     * Thread-safe method to write state file
+     * Uses atomic write with temporary file to prevent corruption
+     */
+    private function writeStateFileSafely(): void
+    {
+        $tempFile = $this->stateFile . '.tmp.' . getmypid();
+        $data = json_encode($this->state, JSON_THROW_ON_ERROR);
+        
+        try {
+            // Write to temporary file first
+            if (file_put_contents($tempFile, $data, LOCK_EX) === false) {
+                throw new \RuntimeException('Failed to write throttle state to temporary file');
+            }
+            
+            // Atomic move - this operation is atomic on most filesystems
+            if (!rename($tempFile, $this->stateFile)) {
+                @unlink($tempFile); // Cleanup on failure
+                throw new \RuntimeException('Failed to update throttle state file atomically');
+            }
+            
+        } catch (\Throwable $e) {
+            // Cleanup temp file if it exists
+            @unlink($tempFile);
+            throw $e;
+        }
     }
 }

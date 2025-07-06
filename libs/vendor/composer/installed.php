@@ -5,8 +5,8 @@
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'reference' => 'cd9a9c8bc37053924638360a08115166781b9af5',
-        'name' => 'yourname/backup-remote',
+        'reference' => '2f56a662ce9fb18072320d0476d1fafe0b9d7604',
+        'name' => 'xnetvn-com/php-backup-remote',
         'dev' => true,
     ),
     'versions' => array(
@@ -508,6 +508,15 @@
             'reference' => '0cc9dd0f17f61d8131e7df6b84bd344899fe2608',
             'dev_requirement' => false,
         ),
+        'symfony/process' => array(
+            'pretty_version' => 'v7.3.0',
+            'version' => '7.3.0.0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../symfony/process',
+            'aliases' => array(),
+            'reference' => '40c295f2deb408d5e9d2d32b8ba1dd61e36f05af',
+            'dev_requirement' => false,
+        ),
         'theseer/tokenizer' => array(
             'pretty_version' => '1.2.3',
             'version' => '1.2.3.0',
@@ -541,13 +550,13 @@
             'reference' => 'a6e709e0e14bfa26c47871ea204464d5a0c730ff',
             'dev_requirement' => false,
         ),
-        'yourname/backup-remote' => array(
+        'xnetvn-com/php-backup-remote' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
-            'reference' => 'cd9a9c8bc37053924638360a08115166781b9af5',
+            'reference' => '2f56a662ce9fb18072320d0476d1fafe0b9d7604',
             'dev_requirement' => false,
         ),
     ),

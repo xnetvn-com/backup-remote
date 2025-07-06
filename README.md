@@ -1,6 +1,30 @@
 # HestiaCP Remote Backup Tool
 
+[![Build Status](https://github.com/xnetvn-com/php-backup-remote/actions/workflows/ci.yml/badge.svg)](https://github.com/xnetvn-com/php-backup-remote/actions)
+[![Coverage Status](https://codecov.io/gh/xnetvn-com/php-backup-remote/branch/main/graph/badge.svg)](https://codecov.io/gh/xnetvn-com/php-backup-remote)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 A robust PHP command-line utility to automate the backup of Hestia Control Panel user data to various remote storage providers. It supports encryption, compression, retention policies, and multi-channel notifications, optimized for servers with limited resources.
+
+## Project Structure
+
+```text
+├── app/                # Application source code (Backup, Notification, Storage, System, Utils)
+├── config/             # Configuration files (app.php, constant.php)
+├── libs/               # Composer dependencies and autoload
+├── storage/            # Logs and runtime data
+├── tests/              # PHPUnit test cases (unit, integration, E2E, hardening)
+├── tmp/                # Temporary working directory for backup operations
+├── .github/            # GitHub Actions, issue templates, CODEOWNERS, PR template
+├── .env.example        # Example environment configuration
+├── run.php             # Main entry point for backup
+├── download.php        # Restore utility
+├── upload.php          # (Optional) Upload utility
+├── README.md           # Project documentation
+├── LICENSE             # Apache License 2.0
+├── NOTICE              # Attribution notice
+└── CONTRIBUTING.md     # Contribution guidelines
+```
 
 ## Features
 
@@ -35,14 +59,14 @@ This tool has been tested on the following operating systems:
 - **Debian/Ubuntu**
 
   ```bash
-  sudo apt update && sudo apt install -y php-cli php-ctype php-mbstring php-openssl php-ftp \
+  sudo apt update && sudo apt install -y php-cli php-mbstring php-common \
     unzip zip gzip zstd bzip2 xz-utils p7zip-full gnupg composer
   ```
 
 - **CentOS/RHEL**
 
   ```bash
-  sudo yum install -y epel-release && sudo yum install -y php-cli php-ctype php-mbstring php-openssl php-ftp \
+  sudo yum install -y epel-release && sudo yum install -y php-cli php-mbstring php-common \
     unzip zip gzip zstd bzip2 xz p7zip p7zip-plugins gnupg composer
   ```
 
@@ -93,6 +117,39 @@ composer install --no-dev --optimize-autoloader
    ```bash
    php run.php
    ```
+
+## Example .env Configuration
+
+```ini
+# Example .env configuration
+BACKUP_PASSWORD=your-super-secret-encryption-password
+BACKUP_DIRS=/backup
+BACKUP_COMPRESSION=none
+BACKUP_ENCRYPTION=aes
+ROTATION_ENABLED=true
+ROTATION_KEEP_LATEST=7
+S3_KEY=your-s3-access-key
+S3_SECRET=your-s3-secret-key
+S3_REGION=ap-southeast-1
+S3_BUCKET=your-s3-bucket-name
+B2_KEY=your-b2-application-key-id
+B2_SECRET=your-b2-application-key
+B2_BUCKET=your-b2-bucket-name
+FTP_HOST=your-ftp-host
+FTP_USER=your-ftp-username
+FTP_PASS=your-ftp-password
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_USER=your-email@example.com
+EMAIL_SMTP_PASS=your-email-password
+ADMIN_EMAIL=admin-to-notify@example.com
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_CHAT_ID=your-telegram-chat-id
+DISCORD_WEBHOOK=your-discord-webhook-url
+SLACK_WEBHOOK=your-slack-webhook-url
+TEAMS_WEBHOOK=your-teams-webhook-url
+GOOGLE_CHAT_WEBHOOK=your-google-chat-webhook-url
+NOTIFY_INTERVAL_MINUTES=180
+```
 
 ## Configuration
 
@@ -258,7 +315,10 @@ Run PHPUnit unit tests:
 
 ## Contributing
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Report issues using [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) and request features via [feature request template](.github/ISSUE_TEMPLATE/feature_request.md).
+We welcome contributions from the community! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines. All contributors must follow the [CODEOWNERS](.github/CODEOWNERS) and use the provided [pull request template](.github/pull_request_template.md). Issues and feature requests should use the appropriate [issue templates](.github/ISSUE_TEMPLATE/).
+
+- **Security Contact:** Please report security vulnerabilities via [security_vulnerability.md](.github/ISSUE_TEMPLATE/security_vulnerability.md) or email [license@xnetvn.net](mailto:license@xnetvn.net).
+- **CI/CD:** All code is automatically tested, linted, scanned for secrets and vulnerabilities, and must pass all checks before merging.
 
 ## License
 

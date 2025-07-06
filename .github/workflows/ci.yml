@@ -33,7 +33,10 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --working-dir=libs
-
+      - name: Validate composer.json
+        run: composer validate --strict --working-dir=libs
+      - name: Composer audit
+        run: composer audit --working-dir=libs
       - name: Run PHP Lint
         run: find app/ -name '*.php' -print0 | xargs -0 -n1 php -l
 
@@ -107,4 +110,4 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-# Dependabot sẽ được cấu hình riêng qua file dependabot.yml
+# Dependabot will be configured separately via the dependabot.yml file

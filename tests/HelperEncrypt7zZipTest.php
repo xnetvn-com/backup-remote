@@ -24,7 +24,7 @@ class HelperEncrypt7zZipTest extends TestCase
         $password = 'TestPassword7zZip!';
         file_put_contents($testFile, random_bytes(1024 * 1024)); // 1MB
         if ($method === '7z') {
-            // Test không mật khẩu
+            // Test without password
             $ok = Helper::sevenZipCompressFile($testFile, $encFile, 5);
             $this->assertTrue($ok, '7z compress failed');
             $ok = Helper::sevenZipDecompressFile($encFile, $decFile);
@@ -32,10 +32,10 @@ class HelperEncrypt7zZipTest extends TestCase
             $this->assertFileExists($decFile);
             $this->assertEquals(hash_file('sha256', $testFile), hash_file('sha256', $decFile), 'Hash mismatch after decompress');
             unlink($encFile); unlink($decFile);
-            // Test có mật khẩu
+            // Test with password
             $ok = Helper::sevenZipCompressFile($testFile, $encFile, 5, $password);
             $this->assertTrue($ok, '7z compress with password failed');
-            // Giải nén với mật khẩu
+            // Decompress with password
             $cmd = ['7z', 'e', '-so', "-p$password", $encFile];
             $out = fopen($decFile, 'wb');
             $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
@@ -50,7 +50,7 @@ class HelperEncrypt7zZipTest extends TestCase
             $this->assertFileExists($decFile);
             $this->assertEquals(hash_file('sha256', $testFile), hash_file('sha256', $decFile), 'Hash mismatch after decompress (password)');
         } elseif ($method === 'zip') {
-            // Test không mật khẩu
+            // Test without password
             $ok = Helper::zipCompressFile($testFile, $encFile, 6);
             $this->assertTrue($ok, 'zip compress failed');
             $ok = Helper::zipDecompressFile($encFile, $decFile);
@@ -58,10 +58,10 @@ class HelperEncrypt7zZipTest extends TestCase
             $this->assertFileExists($decFile);
             $this->assertEquals(hash_file('sha256', $testFile), hash_file('sha256', $decFile), 'Hash mismatch after decompress');
             unlink($encFile); unlink($decFile);
-            // Test có mật khẩu
+            // Test with password
             $ok = Helper::zipCompressFile($testFile, $encFile, 6, $password);
             $this->assertTrue($ok, 'zip compress with password failed');
-            // Giải nén với mật khẩu
+            // Decompress with password
             $cmd = ['unzip', '-P', $password, '-p', $encFile];
             $out = fopen($decFile, 'wb');
             $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);

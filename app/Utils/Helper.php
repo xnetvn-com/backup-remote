@@ -216,20 +216,31 @@ class Helper
         if (!is_readable($inputFile)) {
             return false;
         }
-        $plaintext = file_get_contents($inputFile);
-        if ($plaintext === false) {
-            return false;
-        }
         $iv = random_bytes($ivLength);
-        $ciphertext = openssl_encrypt($plaintext, $cipher, $key, OPENSSL_RAW_DATA, $iv);
-        if ($ciphertext === false) {
+        $in = @fopen($inputFile, 'rb');
+        $out = @fopen($outputFile, 'wb');
+        if (!$in || !$out) {
             return false;
         }
-        // Prepend IV and write to output file
-        $data = $iv . $ciphertext;
-        if (file_put_contents($outputFile, $data) === false) {
-            return false;
+        // write IV at the beginning
+        fwrite($out, $iv);
+        while (!feof($in)) {
+            $chunk = fread($in, $chunkSize);
+            if ($chunk === false) {
+                fclose($in);
+                fclose($out);
+                return false;
+            }
+            $encrypted = openssl_encrypt($chunk, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+            if ($encrypted === false) {
+                fclose($in);
+                fclose($out);
+                return false;
+            }
+            fwrite($out, $encrypted);
         }
+        fclose($in);
+        fclose($out);
         return true;
     }
 
@@ -253,24 +264,37 @@ class Helper
         if (!is_readable($inputFile)) {
             return false;
         }
-        $data = file_get_contents($inputFile);
-        if ($data === false || strlen($data) < $ivLength) {
+        $in = @fopen($inputFile, 'rb');
+        if (!$in) {
             return false;
         }
-        $iv = substr($data, 0, $ivLength);
-        $ciphertext = substr($data, $ivLength);
-        // Handle empty ciphertext (no data beyond IV)
-        if (strlen($ciphertext) === 0) {
-            $plaintext = '';
-        } else {
-            $plaintext = openssl_decrypt($ciphertext, $cipher, $key, OPENSSL_RAW_DATA, $iv);
-            if ($plaintext === false) {
+        $iv = fread($in, $ivLength);
+        if ($iv === false || strlen($iv) < $ivLength) {
+            fclose($in);
+            return false;
+        }
+        $out = @fopen($outputFile, 'wb');
+        if (!$out) {
+            fclose($in);
+            return false;
+        }
+        while (!feof($in)) {
+            $chunk = fread($in, $chunkSize + $ivLength);
+            if ($chunk === false) {
+                fclose($in);
+                fclose($out);
                 return false;
             }
+            $decrypted = openssl_decrypt($chunk, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+            if ($decrypted === false) {
+                fclose($in);
+                fclose($out);
+                return false;
+            }
+            fwrite($out, $decrypted);
         }
-        if (file_put_contents($outputFile, $plaintext) === false) {
-            return false;
-        }
+        fclose($in);
+        fclose($out);
         return true;
     }
 
@@ -288,7 +312,9 @@ class Helper
         $size = 50 * 1024 * 1024; // 50MB for test (adjustable)
         // Create random file
         $fp = fopen($testFile, 'wb');
-        if (!$fp) return false;
+        if (!$fp) {
+            return false;
+        }
         for ($written = 0; $written < $size; $written += 1048576) {
             $chunk = random_bytes(min(1048576, $size - $written));
             fwrite($fp, $chunk);
@@ -296,19 +322,25 @@ class Helper
         fclose($fp);
         // Encrypt
         if (!self::encryptFile($testFile, $encFile, $password)) {
-            @unlink($testFile); @unlink($encFile); @unlink($decFile);
+            @unlink($testFile);
+            @unlink($encFile);
+            @unlink($decFile);
             return false;
         }
         // Decrypt
         if (!self::decryptFile($encFile, $decFile, $password)) {
-            @unlink($testFile); @unlink($encFile); @unlink($decFile);
+            @unlink($testFile);
+            @unlink($encFile);
+            @unlink($decFile);
             return false;
         }
         // Compare hash
         $hash1 = hash_file('sha256', $testFile);
         $hash2 = hash_file('sha256', $decFile);
         // Cleanup
-        @unlink($testFile); @unlink($encFile); @unlink($decFile);
+        @unlink($testFile);
+        @unlink($encFile);
+        @unlink($decFile);
         return $hash1 === $hash2;
     }
 
@@ -324,7 +356,9 @@ class Helper
      */
     public static function zstdEncryptFile(string $inputFile, string $outputFile, string $password, int $level = 19): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = [
             'zstd',
             '--long=31', // max window for huge files
@@ -339,7 +373,9 @@ class Helper
             2 => ['pipe', 'w'], // stderr
         ];
         $process = proc_open($cmd, $descriptors, $pipes);
-        if (!is_resource($process)) return false;
+        if (!is_resource($process)) {
+            return false;
+        }
         fwrite($pipes[0], $password . "\n");
         fclose($pipes[0]);
         // Read output to avoid blocking (zstd writes to file, but may output warnings)
@@ -361,7 +397,9 @@ class Helper
      */
     public static function zstdDecryptFile(string $inputFile, string $outputFile, string $password): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = [
             'zstd',
             '-d',
@@ -376,8 +414,85 @@ class Helper
             2 => ['pipe', 'w'],
         ];
         $process = proc_open($cmd, $descriptors, $pipes);
-        if (!is_resource($process)) return false;
+        if (!is_resource($process)) {
+            return false;
+        }
         fwrite($pipes[0], $password . "\n");
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+        return $exit === 0 && is_file($outputFile);
+    }
+
+    /**
+     * Compresses a file using zstd without encryption.
+     *
+     * @param string $inputFile  Path to the source file.
+     * @param string $outputFile Path to the compressed file (.zst).
+     * @param int    $level      Compression level (default 19).
+     * @return bool
+     */
+    public static function zstdCompressFile(string $inputFile, string $outputFile, int $level = 19): bool
+    {
+        if (!is_readable($inputFile)) {
+            return false;
+        }
+        $cmd = [
+            'zstd',
+            '--long=31', // max window for huge files
+            "-$level",
+            '-o', $outputFile,
+            $inputFile
+        ];
+        $descriptors = [
+            0 => ['pipe', 'r'], // stdin
+            1 => ['pipe', 'w'], // stdout
+            2 => ['pipe', 'w'], // stderr
+        ];
+        $process = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($process)) {
+            return false;
+        }
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+        return $exit === 0 && is_file($outputFile);
+    }
+
+    /**
+     * Decompresses a zstd-compressed file without encryption.
+     *
+     * @param string $inputFile  Path to the compressed file (.zst).
+     * @param string $outputFile Path to the decompressed file.
+     * @return bool
+     */
+    public static function zstdDecompressFile(string $inputFile, string $outputFile): bool
+    {
+        if (!is_readable($inputFile)) {
+            return false;
+        }
+        $cmd = [
+            'zstd',
+            '-d',
+            '--long=31',
+            '-o', $outputFile,
+            $inputFile
+        ];
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($process)) {
+            return false;
+        }
         fclose($pipes[0]);
         stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
@@ -397,7 +512,9 @@ class Helper
      */
     public static function gpgEncryptFile(string $inputFile, string $outputFile, string $password): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = [
             'gpg',
             '--batch',
@@ -414,7 +531,9 @@ class Helper
             2 => ['pipe', 'w'],
         ];
         $process = proc_open($cmd, $descriptors, $pipes);
-        if (!is_resource($process)) return false;
+        if (!is_resource($process)) {
+            return false;
+        }
         fwrite($pipes[0], $password . "\n");
         fclose($pipes[0]);
         stream_get_contents($pipes[1]);
@@ -435,7 +554,9 @@ class Helper
      */
     public static function gpgDecryptFile(string $inputFile, string $outputFile, string $password): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = [
             'gpg',
             '--batch',
@@ -451,7 +572,9 @@ class Helper
             2 => ['pipe', 'w'],
         ];
         $process = proc_open($cmd, $descriptors, $pipes);
-        if (!is_resource($process)) return false;
+        if (!is_resource($process)) {
+            return false;
+        }
         fwrite($pipes[0], $password . "\n");
         fclose($pipes[0]);
         stream_get_contents($pipes[1]);
@@ -495,23 +618,35 @@ class Helper
         $level = is_numeric($level) ? (int)$level : null;
         switch ($method) {
             case 'gzip':
-                if ($level === null) return 1;
+                if ($level === null) {
+                    return 1;
+                }
                 return max(1, min(9, $level));
             case 'zstd':
             case 'zst':
-                if ($level === null) return 19;
+                if ($level === null) {
+                    return 19;
+                }
                 return max(1, min(22, $level));
             case 'bzip2':
-                if ($level === null) return 1;
+                if ($level === null) {
+                    return 1;
+                }
                 return max(1, min(9, $level));
             case 'xz':
-                if ($level === null) return 6;
+                if ($level === null) {
+                    return 6;
+                }
                 return max(0, min(9, $level));
             case 'zip':
-                if ($level === null) return 6;
+                if ($level === null) {
+                    return 6;
+                }
                 return max(0, min(9, $level));
             case '7z':
-                if ($level === null) return 5;
+                if ($level === null) {
+                    return 5;
+                }
                 return max(1, min(9, $level));
             case 'none':
             default:
@@ -528,7 +663,9 @@ class Helper
      */
     public static function gzipCompressFile(string $inputFile, string $outputFile, int $level = 6): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $level = max(1, min(9, $level));
         $cmd = [
             'gzip',
@@ -537,7 +674,9 @@ class Helper
             $inputFile
         ];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -545,7 +684,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -559,10 +700,14 @@ class Helper
      */
     public static function gzipDecompressFile(string $inputFile, string $outputFile): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = ['gzip', '-d', '-c', $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -570,7 +715,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -584,11 +731,15 @@ class Helper
      */
     public static function bzip2CompressFile(string $inputFile, string $outputFile, int $level = 6): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $level = max(1, min(9, $level));
         $cmd = ['bzip2', '-c', "-$level", $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -596,7 +747,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -610,10 +763,14 @@ class Helper
      */
     public static function bzip2DecompressFile(string $inputFile, string $outputFile): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = ['bzip2', '-d', '-c', $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -621,7 +778,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -635,11 +794,15 @@ class Helper
      */
     public static function xzCompressFile(string $inputFile, string $outputFile, int $level = 6): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $level = max(0, min(9, $level));
         $cmd = ['xz', '-c', "-$level", $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -647,7 +810,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -661,10 +826,14 @@ class Helper
      */
     public static function xzDecompressFile(string $inputFile, string $outputFile): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = ['xz', '-d', '-c', $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -672,7 +841,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -687,10 +858,14 @@ class Helper
      */
     public static function zipCompressFile(string $inputFile, string $outputFile, int $level = 6, string $password = null): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $level = max(0, min(9, $level));
         $tmpDir = self::getTmpDir() . '/zip_' . uniqid();
-        if (!mkdir($tmpDir, 0700, true)) return false;
+        if (!mkdir($tmpDir, 0700, true)) {
+            return false;
+        }
         $baseName = basename($inputFile);
         $tmpInput = $tmpDir . '/' . $baseName;
         if (!copy($inputFile, $tmpInput)) {
@@ -724,10 +899,14 @@ class Helper
      */
     public static function zipDecompressFile(string $inputFile, string $outputFile): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = ['unzip', '-p', $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -735,7 +914,9 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
@@ -750,7 +931,9 @@ class Helper
      */
     public static function sevenZipCompressFile(string $inputFile, string $outputFile, int $level = 5, string $password = null): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $level = max(1, min(9, $level));
         $cmd = ['7z', 'a', '-t7z', "-mx=$level"];
         if ($password !== null && $password !== '') {
@@ -760,7 +943,9 @@ class Helper
         $cmd[] = $outputFile;
         $cmd[] = $inputFile;
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
-        if (!is_resource($proc)) return false;
+        if (!is_resource($proc)) {
+            return false;
+        }
         stream_get_contents($pipes[1]);
         fclose($pipes[1]);
         $exit = proc_close($proc);
@@ -772,10 +957,14 @@ class Helper
      */
     public static function sevenZipDecompressFile(string $inputFile, string $outputFile): bool
     {
-        if (!is_readable($inputFile)) return false;
+        if (!is_readable($inputFile)) {
+            return false;
+        }
         $cmd = ['7z', 'e', '-so', $inputFile];
         $out = fopen($outputFile, 'wb');
-        if (!$out) return false;
+        if (!$out) {
+            return false;
+        }
         $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
         if (!is_resource($proc)) {
             fclose($out);
@@ -783,13 +972,248 @@ class Helper
         }
         while (!feof($pipes[1])) {
             $data = fread($pipes[1], 8192);
-            if ($data === false) break;
+            if ($data === false) {
+                break;
+            }
             fwrite($out, $data);
         }
         fclose($pipes[1]);
         fclose($out);
         $exit = proc_close($proc);
         return $exit === 0 && is_file($outputFile);
+    }
+
+    /**
+     * Compresses and encrypts a file using 7z in one step.
+     * This combines compression and encryption for optimal .xbk workflow.
+     *
+     * @param string $inputFile Path to the source file.
+     * @param string $outputFile Path to the output file (.xbk.7z).
+     * @param string $password Password for encryption.
+     * @param int $level Compression level (1-9).
+     * @return bool True on success, false on failure.
+     */
+    public static function sevenZipCompressEncryptFile(string $inputFile, string $outputFile, string $password, int $level = 5): bool
+    {
+        if (!is_readable($inputFile) || empty($password)) {
+            error_log("[Helper] sevenZipCompressEncryptFile: Input file not readable or empty password. inputFile='$inputFile', readable=" . (is_readable($inputFile) ? 'yes' : 'no') . ", password_empty=" . (empty($password) ? 'yes' : 'no'));
+            return false;
+        }
+        $level = max(1, min(9, $level));
+        $cmd = [
+            '7z', 'a', '-t7z', 
+            "-mx=$level",
+            "-p$password",
+            '-mhe=on', // encrypt headers
+            // Note: -mem=AES256 removed as it causes E_INVALIDARG on some 7z versions
+            $outputFile,
+            $inputFile
+        ];
+        
+        error_log("[Helper] sevenZipCompressEncryptFile: Running command: " . implode(' ', array_map('escapeshellarg', $cmd)));
+        
+        $descriptors = [
+            1 => ['pipe', 'w'], // stdout
+            2 => ['pipe', 'w'], // stderr
+        ];
+        $pipes = [];
+        $proc = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($proc)) {
+            error_log("[Helper] sevenZipCompressEncryptFile: Failed to create process");
+            return false;
+        }
+        
+        // Read and discard output to prevent blocking
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        
+        $exit = proc_close($proc);
+        error_log("[Helper] sevenZipCompressEncryptFile: Command exit code: $exit, stderr: $stderr");
+        return $exit === 0 && is_file($outputFile);
+    }
+
+    /**
+     * Decompresses and decrypts a 7z file in one step.
+     * This reverses the sevenZipCompressEncryptFile operation.
+     *
+     * @param string $inputFile Path to the encrypted/compressed file (.xbk.7z).
+     * @param string $outputFile Path to the output file.
+     * @param string $password Password for decryption.
+     * @return bool True on success, false on failure.
+     */
+    public static function sevenZipDecompressDecryptFile(string $inputFile, string $outputFile, string $password): bool
+    {
+        if (!is_readable($inputFile) || empty($password)) {
+            return false;
+        }
+        
+        $cmd = [
+            '7z', 'e', 
+            "-p$password",
+            '-so', // output to stdout
+            $inputFile
+        ];
+        
+        $out = fopen($outputFile, 'wb');
+        if (!$out) {
+            return false;
+        }
+        
+        $descriptors = [
+            1 => ['pipe', 'w'], // stdout - corrected from 'r' to 'w'
+            2 => ['pipe', 'w'], // stderr
+        ];
+        $pipes = [];
+        $proc = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($proc)) {
+            fclose($out);
+            return false;
+        }
+        
+        // Stream the decompressed data to output file
+        while (!feof($pipes[1])) {
+            $data = fread($pipes[1], 8192);
+            if ($data === false) break;
+            fwrite($out, $data);
+        }
+        
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        fclose($out);
+        
+        $exit = proc_close($proc);
+        return $exit === 0 && is_file($outputFile);
+    }
+
+    /**
+     * Compresses and encrypts a file using zip in one step.
+     * This combines compression and encryption for optimal .xbk workflow.
+     *
+     * @param string $inputFile Path to the source file.
+     * @param string $outputFile Path to the output file (.xbk.zip).
+     * @param string $password Password for encryption.
+     * @param int $level Compression level (0-9).
+     * @return bool True on success, false on failure.
+     */
+    public static function zipCompressEncryptFile(string $inputFile, string $outputFile, string $password, int $level = 6): bool
+    {
+        if (!is_readable($inputFile) || empty($password)) {
+            return false;
+        }
+        $level = max(0, min(9, $level));
+        $cmd = [
+            'zip',
+            "-$level", // compression level
+            '-e', // encrypt
+            '-Z', 'aes-256', // use AES-256 encryption
+            '-P', $password, // password
+            $outputFile,
+            $inputFile
+        ];
+        
+        $descriptors = [
+            1 => ['pipe', 'w'], // stdout
+            2 => ['pipe', 'w'], // stderr
+        ];
+        $pipes = [];
+        $proc = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($proc)) {
+            return false;
+        }
+        
+        // Read and discard output to prevent blocking
+        stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        
+        $exit = proc_close($proc);
+        return $exit === 0 && is_file($outputFile);
+    }
+
+    /**
+     * Decompresses and decrypts a zip file in one step.
+     * This reverses the zipCompressEncryptFile operation.
+     *
+     * @param string $inputFile Path to the encrypted/compressed file (.xbk.zip).
+     * @param string $outputFile Path to the output file.
+     * @param string $password Password for decryption.
+     * @return bool True on success, false on failure.
+     */
+    public static function zipDecompressDecryptFile(string $inputFile, string $outputFile, string $password): bool
+    {
+        if (!is_readable($inputFile) || empty($password)) {
+            return false;
+        }
+        
+        // Extract to a temporary directory first
+        $tempDir = sys_get_temp_dir() . '/zip_extract_' . uniqid();
+        if (!mkdir($tempDir, 0700, true)) {
+            return false;
+        }
+        
+        $cmd = [
+            'unzip',
+            '-P', $password, // password
+            '-o', // overwrite
+            '-d', $tempDir, // extract to temp directory
+            $inputFile
+        ];
+        
+        $descriptors = [
+            1 => ['pipe', 'w'], // stdout
+            2 => ['pipe', 'w'], // stderr
+        ];
+        $pipes = [];
+        $proc = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($proc)) {
+            rmdir($tempDir);
+            return false;
+        }
+        
+        stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        
+        $exit = proc_close($proc);
+        if ($exit !== 0) {
+            self::removeDirectory($tempDir);
+            return false;
+        }
+        
+        // Find the extracted file and move it to the output location
+        $files = glob($tempDir . '/*');
+        $success = false;
+        if (count($files) === 1 && is_file($files[0])) {
+            $success = rename($files[0], $outputFile);
+        }
+        
+        // Clean up temp directory
+        self::removeDirectory($tempDir);
+        return $success && is_file($outputFile);
+    }
+
+    /**
+     * Recursively remove a directory and its contents.
+     */
+    private static function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) return;
+        
+        $files = array_diff(scandir($dir), ['.', '..']);
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+            if (is_dir($path)) {
+                self::removeDirectory($path);
+            } else {
+                unlink($path);
+            }
+        }
+        rmdir($dir);
     }
 
     /**
@@ -832,22 +1256,166 @@ class Helper
     }
 
     /**
-     * Add .xbk extension to filename before compression/encryption.
+     * Creates backup filename with .xbk marker for compression and encryption processing.
+     * 
+     * @param string $originalFile Original file path (e.g., "user.2025-01-01_12-00-00.tar")
+     * @param string $compression Compression method (e.g., "gzip", "7z", "zstd", "none")
+     * @param string $encryption Encryption method (e.g., "aes", "gpg", "none")
+     * @return string Processed filename (e.g., "user.2025-01-01_12-00-00.tar.xbk.gz.aes")
      */
-    public static function addXbkExtension(string $filename): string
+    public static function createXbkFilename(string $originalFile, string $compression, string $encryption): string
     {
-        if (str_ends_with($filename, '.xbk')) return $filename;
-        return $filename . '.xbk';
+        $basename = basename($originalFile);
+        $result = $basename . '.xbk';
+        
+        // Special handling for combined compression+encryption methods
+        $compression = strtolower($compression);
+        $encryption = strtolower($encryption);
+        
+        // 7z can compress and encrypt in one step
+        if (($compression === '7z' || $compression === '7zip') && ($encryption === '7z' || $encryption === '7zip')) {
+            $result .= '.7z';
+            return $result;
+        }
+        
+        // zip can compress and encrypt in one step
+        if ($compression === 'zip' && $encryption === 'zip') {
+            $result .= '.zip';
+            return $result;
+        }
+        
+        // Add compression extension for separate compression methods
+        if ($compression !== 'none') {
+            $compExt = match ($compression) {
+                'gzip', 'gz' => 'gz',
+                'bzip2', 'bz2' => 'bz2',
+                'xz' => 'xz',
+                'zstd', 'zst' => 'zst',
+                'zip' => 'zip',
+                '7z', '7zip' => '7z',
+                default => 'gz',
+            };
+            $result .= '.' . $compExt;
+        }
+        
+        // Add encryption extension for separate encryption methods
+        if ($encryption !== 'none' && !in_array($encryption, ['7z', '7zip', 'zip'])) {
+            $encExt = match ($encryption) {
+                'aes', 'openssl' => 'aes',
+                'gpg', 'gpg2', 'gnupg' => 'gpg',
+                default => 'aes',
+            };
+            $result .= '.' . $encExt;
+        }
+        
+        return $result;
     }
 
     /**
-     * Remove .xbk extension from filename (if present).
+     * Parses .xbk filename to extract compression and encryption methods.
+     * 
+     * @param string $filename Filename with .xbk marker (e.g., "user.2025-01-01_12-00-00.tar.xbk.gz.aes")
+     * @return array{original: string, compression: string, encryption: string, hasXbk: bool}
      */
-    public static function removeXbkExtension(string $filename): string
+    public static function parseXbkFilename(string $filename): array
     {
-        if (str_ends_with($filename, '.xbk')) {
-            return substr($filename, 0, -4);
+        $basename = basename($filename);
+        
+        // Check if file has .xbk marker
+        if (!str_contains($basename, '.xbk')) {
+            return [
+                'original' => $basename,
+                'compression' => 'none',
+                'encryption' => 'none',
+                'hasXbk' => false
+            ];
         }
-        return $filename;
+        
+        // Extract original filename (before .xbk)
+        if (str_ends_with($basename, '.xbk')) {
+            // Case: filename.xbk (no additional extensions)
+            $original = preg_replace('/\.xbk$/', '', $basename);
+            $extensions = '';
+        } else {
+            // Case: filename.xbk.ext1.ext2
+            $parts = explode('.xbk.', $basename, 2);
+            $original = $parts[0];
+            $extensions = $parts[1] ?? '';
+        }
+        
+        $compression = 'none';
+        $encryption = 'none';
+        
+        // Parse extensions after .xbk
+        if ($extensions) {
+            $extParts = explode('.', $extensions);
+            
+            // Special handling for combined compression+encryption formats
+            if (count($extParts) === 1) {
+                $ext = strtolower($extParts[0]);
+                if ($ext === '7z') {
+                    // file.tar.xbk.7z = compressed and encrypted with 7z
+                    $compression = '7zip';
+                    $encryption = '7zip';
+                } elseif ($ext === 'zip') {
+                    // file.tar.xbk.zip = compressed and encrypted with zip
+                    $compression = 'zip';
+                    $encryption = 'zip';
+                } elseif (in_array($ext, ['gz', 'bz2', 'xz', 'zst'])) {
+                    // file.tar.xbk.gz = only compressed (no encryption)
+                    $compression = $ext;
+                } elseif (in_array($ext, ['aes', 'gpg'])) {
+                    // file.tar.xbk.aes = only encrypted (no compression)
+                    $encryption = $ext;
+                }
+            } else {
+                // Multiple extensions: file.tar.xbk.gz.aes or file.tar.xbk.zst.gpg
+                foreach ($extParts as $ext) {
+                    $ext = strtolower($ext);
+                    if (in_array($ext, ['gz', 'bz2', 'xz', 'zst'])) {
+                        $compression = $ext;
+                    } elseif (in_array($ext, ['aes', 'gpg'])) {
+                        $encryption = $ext;
+                    }
+                }
+            }
+        }
+        
+        return [
+            'original' => $original,
+            'compression' => $compression,
+            'encryption' => $encryption,
+            'hasXbk' => true
+        ];
+    }
+
+    /**
+     * Adds .xbk before compression extension (legacy function for compatibility).
+     */
+    public static function addXbkExtension(string $fileName): string
+    {
+        $parts = explode('.', $fileName);
+        $ext = array_pop($parts);
+        return implode('.', $parts) . '.xbk.' . $ext;
+    }
+
+    /**
+     * Removes .xbk marker from filename before extension (legacy function for compatibility).
+     */
+    public static function removeXbkExtension(string $fileName): string
+    {
+        return preg_replace('/\.xbk(?=\.[^.]+$)/', '', $fileName);
+    }
+
+    /**
+     * Gets the original filename by removing all .xbk processing extensions.
+     * 
+     * @param string $processedFile Processed filename (e.g., "user.2025-01-01_12-00-00.tar.xbk.gz.aes")
+     * @return string Original filename (e.g., "user.2025-01-01_12-00-00.tar")
+     */
+    public static function getOriginalFilename(string $processedFile): string
+    {
+        $info = self::parseXbkFilename($processedFile);
+        return $info['original'];
     }
 }
