@@ -18,6 +18,9 @@
 use PHPUnit\Framework\TestCase;
 use App\Utils\Helper;
 
+/**
+ * @covers AppUtilsHelper
+ */
 class HelperDetectAllRemotesTest extends TestCase
 {
     protected function setUp(): void

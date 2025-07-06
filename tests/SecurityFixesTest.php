@@ -15,6 +15,9 @@ use App\Exceptions\EncryptionException;
 use App\Exceptions\ValidationException;
 use App\Exceptions\StorageException;
 
+/**
+ * @covers AppUtilsHelper
+ */
 class SecurityFixesTest extends TestCase
 {
     private string $tempDir;

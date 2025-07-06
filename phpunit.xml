@@ -1,26 +1,73 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Copyright (c) 2025 xNetVN Inc.
-    Website: https://xnetvn.com/
-    License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
-    Contact: license@xnetvn.net
-    This file is part of the xNetVN PHP Backup Remote project.
-    This project is licensed under the Apache License 2.0.
-    You may not use this file except in compliance with the License.
+Copyright (c) 2025 xNetVN Inc.
+Website: https://xnetvn.com/
+License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+Contact: license@xnetvn.net
+
+PHPUnit configuration file for HestiaCP Remote Backup Tool
 -->
-<phpunit bootstrap="libs/vendor/autoload.php"
-         colors="true"
-         verbose="true"
-         stopOnFailure="false"
-         stopOnError="false">
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         bootstrap="libs/vendor/autoload.php"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         requireCoverageMetadata="true"
+         beStrictAboutCoverageMetadata="true"
+         beStrictAboutOutputDuringTests="true"
+         beStrictAboutTodoAnnotatedTests="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         testdox="true"
+         displayDetailsOnIncompleteTests="true"
+         displayDetailsOnSkippedTests="true"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
+         displayDetailsOnTestsThatTriggerErrors="true"
+         displayDetailsOnTestsThatTriggerNotices="true"
+         displayDetailsOnTestsThatTriggerWarnings="true">
     <testsuites>
-        <testsuite name="Application Test Suite">
-            <directory>./tests</directory>
+        <testsuite name="Unit Tests">
+            <directory>tests/</directory>
+            <exclude>tests/manual/</exclude>
         </testsuite>
     </testsuites>
-    <coverage processUncoveredFiles="true">
+    <source>
         <include>
-            <directory suffix=".php">./app</directory>
+            <directory suffix=".php">app/</directory>
         </include>
+        <exclude>
+            <directory>libs/vendor/</directory>
+            <directory>storage/</directory>
+            <directory>tmp/</directory>
+        </exclude>
+    </source>
+    <coverage>
+        <report>
+            <clover outputFile="coverage.xml"/>
+            <html outputDirectory="coverage-html" lowUpperBound="35" highLowerBound="70"/>
+            <text outputFile="coverage.txt" showUncoveredFiles="false" showOnlySummary="true"/>
+        </report>
     </coverage>
+    <logging>
+        <junit outputFile="storage/logs/junit.xml"/>
+    </logging>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="BACKUP_PASSWORD" value="test-password-123"/>
+        <env name="BACKUP_DIRS" value="/tmp/test-backup"/>
+        <env name="BACKUP_COMPRESSION" value="none"/>
+        <env name="BACKUP_ENCRYPTION" value="aes"/>
+        <env name="REMOTE_DRIVER" value="local"/>
+        <env name="ROTATION_ENABLED" value="true"/>
+        <env name="ROTATION_KEEP_LATEST" value="3"/>
+        <env name="TMP_DIR" value="/tmp"/>
+        <env name="LOG_LEVEL" value="error"/>
+        <env name="ALLOWED_START_TIME" value=""/>
+        <env name="ALLOWED_END_TIME" value=""/>
+        <env name="MAX_CPU_LOAD" value="100"/>
+        <env name="MIN_DISK_FREE_PERCENT" value="0"/>
+        <env name="MEMORY_LIMIT" value="256M"/>
+        <env name="TIME_LIMIT" value="0"/>
+        <env name="NOTIFY_INTERVAL_MINUTES" value="1"/>
+    </php>
 </phpunit>

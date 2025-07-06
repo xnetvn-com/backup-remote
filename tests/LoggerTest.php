@@ -11,6 +11,9 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 use App\Utils\Logger;
 
+/**
+ * @covers AppUtilsLogger
+ */
 class LoggerTest extends TestCase
 {
     public function test_should_log_info_message(): void

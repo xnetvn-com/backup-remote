@@ -23,7 +23,6 @@ class Helper
     /**
      * Formats size from bytes to KB/MB/GB.
      */
-
     public static function formatSize($bytes): string
     {
         if ($bytes >= 1073741824) {
@@ -36,6 +35,18 @@ class Helper
             return round($bytes / 1024, 2) . ' KB';
         }
         return $bytes . ' B';
+    }
+
+    /**
+     * Alias for formatSize() method.
+     * Formats bytes to human-readable format.
+     * 
+     * @param int $bytes The number of bytes to format
+     * @return string Formatted string with appropriate unit
+     */
+    public static function formatBytes($bytes): string
+    {
+        return self::formatSize($bytes);
     }
 
     /**
@@ -96,9 +107,10 @@ class Helper
 
     /**
      * Creates a unique archive name.
+     *
+     * @psalm-param 'tar'|'zip' $suffix
      */
-
-    public static function createArchiveName($prefix = 'backup', $suffix = 'zip'): string
+    public static function createArchiveName(string $prefix = 'backup', string $suffix = 'zip'): string
     {
         $date = date('Y-m-d_H-i-s');
         return "{$prefix}.{$date}.{$suffix}";
@@ -586,6 +598,81 @@ class Helper
     }
 
     /**
+     * Creates a temporary directory with secure permissions.
+     * @return string Absolute path to the temporary directory.
+     */
+    public static function createSecureTmpDir(): string
+    {
+        $tmpDir = self::getTmpDir() . '/backup_' . uniqid();
+        if (!mkdir($tmpDir, 0700, true)) {
+            throw new \RuntimeException("Cannot create secure temp directory: {$tmpDir}");
+        }
+        return $tmpDir;
+    }
+
+    /**
+     * Creates a file with secure permissions (0600).
+     * @param string $filePath Path to create the file
+     * @param string $content Content to write
+     * @return bool Success
+     */
+    public static function createSecureFile(string $filePath, string $content = ''): bool
+    {
+        // Set umask to ensure secure permissions
+        $oldUmask = umask(0077);
+        $result = file_put_contents($filePath, $content, LOCK_EX);
+        umask($oldUmask);
+        
+        if ($result !== false) {
+            // Explicitly set secure permissions
+            chmod($filePath, 0600);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Validates file permissions for security.
+     * @param string $filePath Path to check
+     * @param int $expectedPerms Expected permissions (octal)
+     * @return bool True if permissions are secure
+     */
+    public static function validateFilePermissions(string $filePath, int $expectedPerms = 0600): bool
+    {
+        if (!file_exists($filePath)) {
+            return false;
+        }
+        
+        $actualPerms = fileperms($filePath) & 0777;
+        // For directories, check against directory permissions
+        if (is_dir($filePath) && $expectedPerms === 0700) {
+            return $actualPerms === 0700;
+        }
+        // For files, check against file permissions
+        if (is_file($filePath) && $expectedPerms === 0600) {
+            return $actualPerms === 0600;
+        }
+        // Generic check
+        return $actualPerms === $expectedPerms;
+    }
+
+    /**
+     * Sets secure permissions on a file or directory.
+     * @param string $path Path to set permissions on
+     * @param bool $isDirectory Whether the path is a directory
+     * @return bool Success
+     */
+    public static function setSecurePermissions(string $path, bool $isDirectory = false): bool
+    {
+        if (!file_exists($path)) {
+            return false;
+        }
+        
+        $perms = $isDirectory ? 0700 : 0600;
+        return chmod($path, $perms);
+    }
+
+    /**
      * Get the normalized temporary directory for backup (priority: TMP_DIR, then /tmp, then ./tmp).
      * Ensure the directory exists and is writable.
      * @return string Absolute path to the temporary directory.
@@ -996,7 +1083,8 @@ class Helper
     public static function sevenZipCompressEncryptFile(string $inputFile, string $outputFile, string $password, int $level = 5): bool
     {
         if (!is_readable($inputFile) || empty($password)) {
-            error_log("[Helper] sevenZipCompressEncryptFile: Input file not readable or empty password. inputFile='$inputFile', readable=" . (is_readable($inputFile) ? 'yes' : 'no') . ", password_empty=" . (empty($password) ? 'yes' : 'no'));
+            // Only log error if needed, do not log sensitive info or debug details
+            // Optionally, use project logger to log error to file if required
             return false;
         }
         $level = max(1, min(9, $level));
@@ -1004,13 +1092,10 @@ class Helper
             '7z', 'a', '-t7z', 
             "-mx=$level",
             "-p$password",
-            '-mhe=on', // encrypt headers
-            // Note: -mem=AES256 removed as it causes E_INVALIDARG on some 7z versions
+            '-mhe=on',
             $outputFile,
             $inputFile
         ];
-        
-        error_log("[Helper] sevenZipCompressEncryptFile: Running command: " . implode(' ', array_map('escapeshellarg', $cmd)));
         
         $descriptors = [
             1 => ['pipe', 'w'], // stdout
@@ -1019,7 +1104,7 @@ class Helper
         $pipes = [];
         $proc = proc_open($cmd, $descriptors, $pipes);
         if (!is_resource($proc)) {
-            error_log("[Helper] sevenZipCompressEncryptFile: Failed to create process");
+            // Only log error if needed, do not log sensitive info
             return false;
         }
         
@@ -1030,7 +1115,6 @@ class Helper
         fclose($pipes[2]);
         
         $exit = proc_close($proc);
-        error_log("[Helper] sevenZipCompressEncryptFile: Command exit code: $exit, stderr: $stderr");
         return $exit === 0 && is_file($outputFile);
     }
 
@@ -1354,13 +1438,15 @@ class Helper
             if (count($extParts) === 1) {
                 $ext = strtolower($extParts[0]);
                 if ($ext === '7z') {
-                    // file.tar.xbk.7z = compressed and encrypted with 7z
+                    // file.tar.xbk.7z can be compression-only or compression+encryption
+                    // When used alone, it's compression-only by default
                     $compression = '7zip';
-                    $encryption = '7zip';
+                    $encryption = 'none';
                 } elseif ($ext === 'zip') {
-                    // file.tar.xbk.zip = compressed and encrypted with zip
+                    // file.tar.xbk.zip can be compression-only or compression+encryption  
+                    // When used alone, it's compression-only by default
                     $compression = 'zip';
-                    $encryption = 'zip';
+                    $encryption = 'none';
                 } elseif (in_array($ext, ['gz', 'bz2', 'xz', 'zst'])) {
                     // file.tar.xbk.gz = only compressed (no encryption)
                     $compression = $ext;
@@ -1395,6 +1481,10 @@ class Helper
     public static function addXbkExtension(string $fileName): string
     {
         $parts = explode('.', $fileName);
+        if (count($parts) === 1) {
+            // No extension, just add .xbk
+            return $fileName . '.xbk';
+        }
         $ext = array_pop($parts);
         return implode('.', $parts) . '.xbk.' . $ext;
     }

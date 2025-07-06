@@ -10,6 +10,10 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+/**
+ * Test class for backup directory read-only functionality.
+ * @coversNothing
+ */
 class BackupDirsReadOnlyTest extends TestCase
 {
     private string $backupDir;

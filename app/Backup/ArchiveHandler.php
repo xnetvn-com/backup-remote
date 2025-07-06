@@ -293,7 +293,7 @@ class ArchiveHandler
                 };
                 
                 if (!$ok) {
-                    $this->logger->error("Failed to compress archive with {$compression}: " . ($tarPath ?? $userPath));
+                    $this->logger->error("Failed to compress archive with {$compression}: {$tarPath}");
                     return null;
                 }
                 $this->logger->info("Archive for {$username} created and compressed with {$compression} (level: " . ($compressionLevel ?? '-') . ").");

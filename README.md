@@ -81,7 +81,9 @@ This tool has been tested on the following operating systems:
 ```bash
 git clone https://github.com/xnetvn-com/php-backup-remote.git
 cd php-backup-remote
+cd libs
 composer install --no-dev --optimize-autoloader
+cd ..
 ```
 
 ### Quick Start
@@ -93,10 +95,19 @@ composer install --no-dev --optimize-autoloader
    cd php-backup-remote
    ```
 
-2. Install PHP dependencies:
+2. Install PHP dependencies (production):
 
    ```bash
+   cd libs
    composer install --no-dev --optimize-autoloader
+   cd ..
+   ```
+   
+   For development (with dev dependencies):
+   ```bash
+   cd libs
+   composer install
+   cd ..
    ```
 
 3. Copy and customize environment settings:
@@ -121,34 +132,98 @@ composer install --no-dev --optimize-autoloader
 ## Example .env Configuration
 
 ```ini
-# Example .env configuration
+# Core backup settings
 BACKUP_PASSWORD=your-super-secret-encryption-password
-BACKUP_DIRS=/backup
-BACKUP_COMPRESSION=none
-BACKUP_ENCRYPTION=aes
+BACKUP_DIRS=/backup,/home,/var/www
+BACKUP_COMPRESSION=gzip   # Options: none, gzip, zstd, bzip2, xz, zip, 7z
+BACKUP_COMPRESSION_LEVEL=6
+BACKUP_ENCRYPTION=aes     # Options: none, aes, gpg
+BACKUP_ENCRYPTION_KEY_PATH=/path/to/public.key # For GPG (optional)
+TMP_DIR=/tmp/php-backup-remote
+
+# Rotation & retention
 ROTATION_ENABLED=true
 ROTATION_KEEP_LATEST=7
+ROTATION_KEEP_DAILY=7
+ROTATION_KEEP_WEEKLY=4
+ROTATION_KEEP_MONTHLY=12
+ROTATION_KEEP_YEARLY=3
+ROTATION_PATTERN=*.xbk.*
+
+# Remote storage (S3, B2, FTP, Local)
+REMOTE_DRIVER=s3          # Options: s3, b2, ftp, local
+
+# S3 settings
 S3_KEY=your-s3-access-key
 S3_SECRET=your-s3-secret-key
 S3_REGION=ap-southeast-1
 S3_BUCKET=your-s3-bucket-name
+S3_ENDPOINT=https://s3.example.com
+S3_USE_PATH_STYLE=true
+
+# Backblaze B2 settings
 B2_KEY=your-b2-application-key-id
 B2_SECRET=your-b2-application-key
 B2_BUCKET=your-b2-bucket-name
+B2_REGION=us-west-002
+
+# FTP settings
 FTP_HOST=your-ftp-host
 FTP_USER=your-ftp-username
 FTP_PASS=your-ftp-password
+FTP_ROOT=/backups
+FTP_SSL=true
+FTP_PASSIVE=true
+
+# Local storage
+LOCAL_PATH=/mnt/backup-disk
+
+# Performance & resource limits
+ALLOWED_START_TIME=01:00
+ALLOWED_END_TIME=05:00
+MAX_CPU_LOAD=2.5
+MIN_DISK_FREE_PERCENT=15
+MEMORY_LIMIT=256M
+TIME_LIMIT=3600
+
+# Notification settings
 EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
 EMAIL_SMTP_USER=your-email@example.com
-EMAIL_SMTP_PASS=your-email-password
-ADMIN_EMAIL=admin-to-notify@example.com
+EMAIL_SMTP_PASS=your-smtp-password
+EMAIL_SMTP_ENCRYPTION=tls
+ADMIN_EMAIL=admin@example.com
+
 TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 TELEGRAM_CHAT_ID=your-telegram-chat-id
+
 DISCORD_WEBHOOK=your-discord-webhook-url
 SLACK_WEBHOOK=your-slack-webhook-url
 TEAMS_WEBHOOK=your-teams-webhook-url
 GOOGLE_CHAT_WEBHOOK=your-google-chat-webhook-url
 NOTIFY_INTERVAL_MINUTES=180
+
+# Advanced options
+DRY_RUN=false
+LOG_CHANNEL=app
+LOG_PATH=storage/logs/app.log
+LOG_LEVEL=info
+LOCK_FILE=storage/.backup.lock
+
+# Security
+ENFORCE_READONLY=true
+SAFE_MODE=true
+
+# Developer/debug
+DEBUG=false
+VERBOSE=false
+
+# Custom user hooks (optional)
+PRE_BACKUP_HOOK=/path/to/pre-backup.sh
+POST_BACKUP_HOOK=/path/to/post-backup.sh
+
+# Example for multiple backup sources
+# BACKUP_DIRS=/backup,/home/user1,/home/user2,/var/www/html
 ```
 
 ## Configuration
@@ -166,8 +241,11 @@ Open `.env` and configure:
 | BACKUP_PASSWORD           | Password for AES or GPG encryption (choose a strong secret)         | *REQUIRED*          |
 | BACKUP_DIRS               | Comma-separated absolute paths to backup user directories           | `/backup`           |
 | BACKUP_COMPRESSION        | Compression method (`none`, `gzip`, `zstd`)                         | `none`              |
+| BACKUP_COMPRESSION_LEVEL  | Compression level (1-9, default 6)                                  | `6`                  |
 | BACKUP_ENCRYPTION         | Encryption method (`none`, `aes`, `gpg`)                           | `aes`               |
+| BACKUP_ENCRYPTION_KEY_PATH| Path to public key for GPG encryption (optional)                   | *Not set*         |
 | REMOTE_DRIVER             | Override to use a single storage driver: `s3`, `b2`, `ftp` or `local` | *Not set*         |
+| TMP_DIR                   | Temporary directory for backup operations                            | `/tmp/php-backup-remote` |
 
 ### S3 Driver Settings
 
@@ -178,6 +256,7 @@ Open `.env` and configure:
 | S3_REGION                 | S3 region                                                           |
 | S3_BUCKET                 | S3 bucket name                                                      |
 | S3_ENDPOINT               | Custom endpoint (for non-AWS providers)                             |
+| S3_USE_PATH_STYLE         | `true` if using path-style URLs (e.g., DigitalOcean Spaces)       |
 
 ### Backblaze B2 Settings
 
@@ -199,12 +278,23 @@ Open `.env` and configure:
 | FTP_SSL                   | `true` or `false` for FTPS (optional)                               |
 | FTP_PASSIVE               | `true` (passive) or `false` (active) (recommended: `true`)          |
 
+### Local Storage Settings
+
+| Variable                  | Description                                                         |
+|---------------------------|---------------------------------------------------------------------|
+| LOCAL_PATH                | Local file system path for backups                                  |
+
 ### Rotation Settings
 
 | Variable                  | Description                 | Default  |
 |---------------------------|-----------------------------|----------|
 | ROTATION_ENABLED          | Enable automatic rotation   | `true`   |
 | ROTATION_KEEP_LATEST      | Number of recent backups to keep | `7` |
+| ROTATION_KEEP_DAILY       | Number of daily backups to keep | `7` |
+| ROTATION_KEEP_WEEKLY      | Number of weekly backups to keep | `4` |
+| ROTATION_KEEP_MONTHLY     | Number of monthly backups to keep | `12` |
+| ROTATION_KEEP_YEARLY      | Number of yearly backups to keep | `3` |
+| ROTATION_PATTERN          | Pattern to match backup files for rotation | `*.xbk.*` |
 
 ### Performance Limits
 
@@ -222,42 +312,49 @@ Open `.env` and configure:
 | Variable                  | Description                                                    | Default |
 |---------------------------|----------------------------------------------------------------|----------|
 | EMAIL_SMTP_HOST           | SMTP server host                                              | -       |
+| EMAIL_SMTP_PORT           | SMTP server port                                              | `587`   |
 | EMAIL_SMTP_USER           | SMTP username                                                 | -       |
 | EMAIL_SMTP_PASS           | SMTP password                                                 | -       |
+| EMAIL_SMTP_ENCRYPTION     | SMTP encryption method (`tls`, `ssl`, or empty for none)    | `tls`   |
 | ADMIN_EMAIL               | Email address to receive notifications                        | -       |
 | TELEGRAM_BOT_TOKEN        | Telegram bot token                                            | -       |
 | TELEGRAM_CHAT_ID          | Telegram chat ID                                              | -       |
+| DISCORD_WEBHOOK           | Discord webhook URL                                           | -       |
+| SLACK_WEBHOOK             | Slack webhook URL                                             | -       |
+| TEAMS_WEBHOOK             | Microsoft Teams webhook URL                                   | -       |
+| GOOGLE_CHAT_WEBHOOK       | Google Chat webhook URL                                       | -       |
 | NOTIFY_INTERVAL_MINUTES   | Cool-down period between notifications (minutes)              | `180`   |
 
-#### Email Channel
+### Advanced Options
 
-Configure SMTP settings:
+| Variable                  | Description                                                    | Default |
+|---------------------------|----------------------------------------------------------------|---------|
+| DRY_RUN                   | Simulate backup without writing/uploading files                | `false` |
+| LOG_CHANNEL               | Log channel name (for Monolog)                                 | `app`   |
+| LOG_PATH                  | Path to log file                                               | `storage/logs/app.log` |
+| LOG_LEVEL                 | Log level (`info`, `debug`, `error`, etc.)                     | `info`  |
+| LOCK_FILE                 | Path to lock file to prevent concurrent runs                   | `storage/.backup.lock` |
 
-```ini
-EMAIL_SMTP_HOST=smtp.example.com
-EMAIL_SMTP_PORT=587
-EMAIL_SMTP_USER=your-email@example.com
-EMAIL_SMTP_PASS=your-smtp-password
-EMAIL_SMTP_ENCRYPTION=tls
-ADMIN_EMAIL=admin@example.com
-```
+### Security Options
 
-#### Telegram Channel
+| Variable                  | Description                                                    | Default |
+|---------------------------|----------------------------------------------------------------|---------|
+| ENFORCE_READONLY          | Enforce read-only mode for BACKUP_DIRS                         | `true`  |
+| SAFE_MODE                 | Enable extra safety checks (recommended)                       | `true`  |
 
-```ini
-TELEGRAM_BOT_TOKEN=your-telegram-bot-token
-TELEGRAM_CHAT_ID=your-telegram-chat-id
-```
+### Developer/Debug Options
 
-#### Other Webhook Options
+| Variable                  | Description                                                    | Default |
+|---------------------------|----------------------------------------------------------------|---------|
+| DEBUG                     | Enable debug mode                                              | `false` |
+| VERBOSE                   | Enable verbose output                                          | `false` |
 
-```ini
-DISCORD_WEBHOOK=your-discord-webhook-url
-SLACK_WEBHOOK=your-slack-webhook-url
-TEAMS_WEBHOOK=your-teams-webhook-url
-GOOGLE_CHAT_WEBHOOK=your-google-chat-webhook-url
-NOTIFY_INTERVAL_MINUTES=180
-```
+### Custom User Hooks
+
+| Variable                  | Description                                                    | Default |
+|---------------------------|----------------------------------------------------------------|---------|
+| PRE_BACKUP_HOOK           | Path to script to run before backup                            | *Not set* |
+| POST_BACKUP_HOOK          | Path to script to run after backup                             | *Not set* |
 
 ## Security & Data Integrity
 

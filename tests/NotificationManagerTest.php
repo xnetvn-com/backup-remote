@@ -9,6 +9,9 @@ use PHPUnit\Framework\TestCase;
 use App\Notification\NotificationManager;
 use Psr\Log\LoggerInterface;
 
+/**
+ * @covers AppNotificationNotificationManager
+ */
 class NotificationManagerTest extends TestCase
 {
     public function test_sendSuccess_should_not_throw()

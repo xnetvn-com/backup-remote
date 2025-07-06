@@ -24,6 +24,7 @@ Thumbs.db
 
 # Ignore logs and runtime
 storage/logs/
+reports/
 
 # Ignore vendor (if not committed)
 /vendor/
@@ -45,6 +46,7 @@ tmp/
 
 # Ignore lock files
 composer.lock
+libs/composer.lock
 
 # Ignore backup files
 *.bak

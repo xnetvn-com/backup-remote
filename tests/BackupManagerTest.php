@@ -13,8 +13,18 @@ use App\Backup\BackupManager;
 use Psr\Log\LoggerInterface;
 use App\Notification\NotificationManager;
 
+/**
+ * Test class for BackupManager functionality.
+ * @covers App\Backup\BackupManager
+ */
+/**
+ * @covers AppBackupBackupManager
+ */
 class BackupManagerTest extends TestCase
 {
+    /**
+     * @covers App\Backup\BackupManager::__construct
+     */
     public function test_should_instantiate_backup_manager_with_valid_dependencies(): void
     {
         $config = [
@@ -35,6 +45,9 @@ class BackupManagerTest extends TestCase
         $this->assertInstanceOf(BackupManager::class, $backupManager);
     }
 
+    /**
+     * @covers App\Backup\BackupManager::__construct
+     */
     public function test_should_throw_exception_when_config_is_missing_backup_dirs(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -53,6 +66,9 @@ class BackupManagerTest extends TestCase
         new BackupManager($config, $logger, $notificationManager);
     }
 
+    /**
+     * @covers App\Backup\BackupManager::run
+     */
     public function test_should_log_and_alert_when_missing_remote_driver(): void
     {
         $config = [
@@ -76,6 +92,9 @@ class BackupManagerTest extends TestCase
         $backupManager->run();
     }
 
+    /**
+     * @covers App\Backup\BackupManager::cleanupTmpDir
+     */
     public function test_should_cleanup_tmp_dir_remove_files(): void
     {
         $tmpDir = sys_get_temp_dir() . '/test_backup_tmp_' . uniqid();

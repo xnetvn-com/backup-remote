@@ -12,8 +12,18 @@ use PHPUnit\Framework\TestCase;
 use App\Backup\ArchiveHandler;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Test class for ArchiveHandler functionality.
+ * @covers App\Backup\ArchiveHandler
+ */
+/**
+ * @covers AppBackupArchiveHandler
+ */
 class ArchiveHandlerTest extends TestCase
 {
+    /**
+     * @covers App\Backup\ArchiveHandler::createArchive
+     */
     public function test_should_apply_compression_and_encryption_from_env(): void
     {
         // Setup env

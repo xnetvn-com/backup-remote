@@ -11,6 +11,9 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 use App\Utils\Helper;
 
+/**
+ * @covers AppUtilsHelper
+ */
 class HelperCompressionTest extends TestCase
 {
     private function createTempFile(string $content = 'testdata'): string

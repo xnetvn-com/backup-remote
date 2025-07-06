@@ -10,6 +10,10 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+/**
+ * End-to-end test for read-only backup functionality.
+ * @coversNothing
+ */
 class BackupE2EReadOnlyTest extends TestCase
 {
     private string $backupDir;

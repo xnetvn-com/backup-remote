@@ -11,22 +11,25 @@
 namespace App\Notification\Channels;
 
 use GuzzleHttp\Client;
+use Monolog\Logger;
 
 class TelegramChannel
 {
-    private $config;
+    private array $config;
+    private Logger $logger;
 
-    public function __construct($config)
+    public function __construct(array $config, Logger $logger)
     {
         $this->config = $config;
+        $this->logger = $logger;
     }
 
-    public function getName()
+    public function getName(): string
     {
         return 'telegram';
     }
 
-    public function send($level, $subject, $message, $details = null)
+    public function send(string $level, string $subject, string $message, ?string $details = null): void
     {
         $token = $this->config['TELEGRAM_BOT_TOKEN'] ?? null;
         $chatId = $this->config['TELEGRAM_CHAT_ID'] ?? null;

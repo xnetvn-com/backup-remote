@@ -13,6 +13,9 @@ use App\Backup\RotationManager;
 use Psr\Log\LoggerInterface;
 use League\Flysystem\Filesystem;
 
+/**
+ * @covers AppBackupRotationManager
+ */
 class RotationManagerTest extends TestCase
 {
     public function test_should_group_files_by_user_and_apply_keep_latest_policy(): void

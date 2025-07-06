@@ -76,6 +76,56 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Notification Settings
+    |--------------------------------------------------------------------------
+    |
+    | Configure notification channels for backup status alerts. Multiple
+    | channels can be enabled simultaneously.
+    |
+    */
+    'notification' => [
+        'channels' => [
+            'email' => [
+                'enabled' => !empty(Helper::env('EMAIL_SMTP_HOST')),
+                'smtp_host' => Helper::env('EMAIL_SMTP_HOST'),
+                'smtp_port' => (int) Helper::env('EMAIL_SMTP_PORT', 587),
+                'smtp_user' => Helper::env('EMAIL_SMTP_USER'),
+                'smtp_pass' => Helper::env('EMAIL_SMTP_PASS'),
+                'smtp_encryption' => Helper::env('EMAIL_SMTP_ENCRYPTION', 'tls'),
+                'admin_email' => Helper::env('ADMIN_EMAIL'),
+            ],
+            'telegram' => [
+                'enabled' => !empty(Helper::env('TELEGRAM_BOT_TOKEN')),
+                'bot_token' => Helper::env('TELEGRAM_BOT_TOKEN'),
+                'chat_id' => Helper::env('TELEGRAM_CHAT_ID'),
+            ],
+            'webhooks' => [
+                'discord' => Helper::env('DISCORD_WEBHOOK'),
+                'slack' => Helper::env('SLACK_WEBHOOK'),
+                'teams' => Helper::env('TEAMS_WEBHOOK'),
+                'google_chat' => Helper::env('GOOGLE_CHAT_WEBHOOK'),
+            ],
+        ],
+        'throttle' => [
+            'interval_minutes' => (int) Helper::env('NOTIFY_INTERVAL_MINUTES', 180),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Local Settings
+    |--------------------------------------------------------------------------
+    |
+    | Configure local filesystem paths and environment settings.
+    |
+    */
+    'local' => [
+        'temp_dir' => Helper::env('TMP_DIR', sys_get_temp_dir()),
+        'environment' => Helper::env('APP_ENV', 'production'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Archive Settings
     |--------------------------------------------------------------------------
     |

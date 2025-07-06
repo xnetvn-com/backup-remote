@@ -9,6 +9,9 @@
 use PHPUnit\Framework\TestCase;
 use App\Utils\Helper;
 
+/**
+ * @covers AppUtilsHelper
+ */
 class HelperCompressionLevelTest extends TestCase
 {
     /**

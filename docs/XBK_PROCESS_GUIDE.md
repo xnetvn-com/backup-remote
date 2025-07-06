@@ -1,104 +1,104 @@
-# Quy Trình Xử Lý File Backup với Marker .xbk
+# XBK Backup File Processing Guide
 
-## Tổng Quan
+## Overview
 
-Hệ thống backup đã được cải tiến để sử dụng marker `.xbk` (xNetVN Backup) nhằm nhận diện và xử lý các file đã được nén và mã hóa. Điều này đảm bảo quá trình khôi phục được thực hiện chính xác theo đúng thứ tự và phương pháp đã sử dụng khi tạo backup.
+The backup system has been enhanced to use the `.xbk` (xNetVN Backup) marker to identify and process files that have been compressed and encrypted. This ensures that the restoration process is performed accurately according to the correct order and methods used when creating the backup.
 
-## Quy Trình Tạo Backup (Upload/Run)
+## Backup Creation Process (Upload/Run)
 
-### Cấu Trúc Tên File
+### File Name Structure
 
 ```text
 {original_filename}.xbk[.{compression_ext}][.{encryption_ext}]
 ```
 
-### Ví Dụ Các Định Dạng
+### Format Examples
 
-| Phương Pháp | File Gốc | File Sau Xử Lý | Mô Tả |
-|-------------|----------|-----------------|--------|
-| **7z + None** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.7z` | Nén bằng 7z, không mã hóa |
-| **Gzip + GPG** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.gz.gpg` | Nén bằng gzip, mã hóa bằng GPG |
-| **Zstd + AES** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.zst.aes` | Nén bằng zstd, mã hóa bằng AES |
-| **None + AES** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.aes` | Không nén, chỉ mã hóa AES |
-| **Zip + None** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.zip` | Nén bằng zip, không mã hóa |
-| **Bzip2 + GPG** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.bz2.gpg` | Nén bằng bzip2, mã hóa bằng GPG |
+| Method | Original File | Processed File | Description |
+|---------|---------------|----------------|-------------|
+| **7z + None** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.7z` | Compressed with 7z, no encryption |
+| **Gzip + GPG** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.gz.gpg` | Compressed with gzip, encrypted with GPG |
+| **Zstd + AES** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.zst.aes` | Compressed with zstd, encrypted with AES |
+| **None + AES** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.aes` | No compression, AES encryption only |
+| **Zip + None** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.zip` | Compressed with zip, no encryption |
+| **Bzip2 + GPG** | `xtest.2025-06-02_06-02-16.tar` | `xtest.2025-06-02_06-02-16.tar.xbk.bz2.gpg` | Compressed with bzip2, encrypted with GPG |
 
-### Thứ Tự Xử Lý (Backup)
+### Processing Order (Backup)
 
-1. **Tạo Archive TAR** (nếu cần)
-2. **Nén** (compression) - nếu được kích hoạt
-3. **Mã Hóa** (encryption) - nếu được kích hoạt
-4. **Upload** lên remote storage
+1. **Create TAR Archive** (if needed)
+2. **Compression** - if enabled
+3. **Encryption** - if enabled
+4. **Upload** to remote storage
 
-## Quy Trình Khôi Phục (Download)
+## Restoration Process (Download)
 
-### Nhận Diện File
+### File Recognition
 
-Hệ thống sử dụng pattern sau để nhận diện file backup:
+The system uses the following pattern to identify backup files:
 
 ```regex
 /^([a-zA-Z0-9_.-]+)\.(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.tar(?:\.xbk)?(?:\.(gz|bz2|xz|zst|zip|7z))?(?:\.(aes|gpg))?$/
 ```
 
-### Thứ Tự Xử Lý (Khôi Phục)
+### Processing Order (Restoration)
 
-1. **Download** file từ remote storage
-2. **Phân Tích** tên file để xác định phương pháp xử lý
-3. **Giải Mã** (decryption) - nếu có encryption
-4. **Giải Nén** (decompression) - nếu có compression  
-5. **Khôi Phục** tên file gốc (loại bỏ marker `.xbk`)
+1. **Download** file from remote storage
+2. **Analyze** filename to determine processing method
+3. **Decryption** - if encryption exists
+4. **Decompression** - if compression exists
+5. **Restore** original filename (remove `.xbk` marker)
 
-### Ví Dụ Quy Trình Khôi Phục
+### Restoration Process Examples
 
-#### Ví Dụ 1: File `xtest.2025-06-02_06-02-16.tar.xbk.gz.gpg`
+#### Example 1: File `xtest.2025-06-02_06-02-16.tar.xbk.gz.gpg`
 
 ```bash
-# File ban đầu: xtest.2025-06-02_06-02-16.tar.xbk.gz.gpg
-# Phân tích: compression=gz, encryption=gpg
+# Original file: xtest.2025-06-02_06-02-16.tar.xbk.gz.gpg
+# Analysis: compression=gz, encryption=gpg
 
-# Bước 1: Giải mã GPG
+# Step 1: GPG Decryption
 gpg --decrypt file.tar.xbk.gz.gpg > file.tar.xbk.gz
 
-# Bước 2: Giải nén Gzip  
+# Step 2: Gzip Decompression
 gunzip file.tar.xbk.gz → file.tar.xbk
 
-# Bước 3: Khôi phục tên gốc
+# Step 3: Restore original name
 mv file.tar.xbk → file.tar
 ```
 
-#### Ví Dụ 2: File `xtest.2025-06-02_06-02-16.tar.xbk.7z`
+#### Example 2: File `xtest.2025-06-02_06-02-16.tar.xbk.7z`
 
 ```bash
-# File ban đầu: xtest.2025-06-02_06-02-16.tar.xbk.7z
-# Phân tích: compression=7z, encryption=none
+# Original file: xtest.2025-06-02_06-02-16.tar.xbk.7z
+# Analysis: compression=7z, encryption=none
 
-# Bước 1: Giải nén 7z
+# Step 1: 7z Decompression
 7z x file.tar.xbk.7z → file.tar.xbk
 
-# Bước 2: Khôi phục tên gốc
+# Step 2: Restore original name
 mv file.tar.xbk → file.tar
 ```
 
-#### Ví Dụ 3: File `xtest.2025-06-02_06-02-16.tar.xbk.zst.aes`
+#### Example 3: File `xtest.2025-06-02_06-02-16.tar.xbk.zst.aes`
 
 ```bash
-# File ban đầu: xtest.2025-06-02_06-02-16.tar.xbk.zst.aes
-# Phân tích: compression=zst, encryption=aes
+# Original file: xtest.2025-06-02_06-02-16.tar.xbk.zst.aes
+# Analysis: compression=zst, encryption=aes
 
-# Bước 1: Giải mã AES
+# Step 1: AES Decryption
 openssl_decrypt(file.tar.xbk.zst.aes) → file.tar.xbk.zst
 
-# Bước 2: Giải nén Zstd
+# Step 2: Zstd Decompression
 zstd -d file.tar.xbk.zst → file.tar.xbk
 
-# Bước 3: Khôi phục tên gốc
+# Step 3: Restore original name
 mv file.tar.xbk → file.tar
 ```
 
-## Các Phương Pháp Nén Được Hỗ Trợ
+## Supported Compression Methods
 
-| Phương Pháp | Extension | Lệnh Nén | Lệnh Giải Nén |
-|-------------|-----------|----------|---------------|
+| Method | Extension | Compression Command | Decompression Command |
+|--------|-----------|--------------------|-----------------------|
 | **Gzip** | `.gz` | `gzip` | `gunzip` |
 | **Bzip2** | `.bz2` | `bzip2` | `bunzip2` |
 | **XZ** | `.xz` | `xz` | `unxz` |
@@ -106,47 +106,47 @@ mv file.tar.xbk → file.tar
 | **Zip** | `.zip` | `zip` | `unzip` |
 | **7-Zip** | `.7z` | `7z a` | `7z x` |
 
-## Các Phương Pháp Mã Hóa Được Hỗ Trợ
+## Supported Encryption Methods
 
-| Phương Pháp | Extension | Mô Tả |
-|-------------|-----------|--------|
-| **AES** | `.aes` | AES-256-CBC với OpenSSL |
+| Method | Extension | Description |
+|--------|-----------|-------------|
+| **AES** | `.aes` | AES-256-CBC with OpenSSL |
 | **GPG** | `.gpg` | GNU Privacy Guard |
 
-## Cấu Hình Environment
+## Environment Configuration
 
 ```bash
-# Nén
+# Compression
 BACKUP_COMPRESSION=gzip      # none, gzip, bzip2, xz, zstd, zip, 7z
-BACKUP_COMPRESSION_LEVEL=6   # Mức nén (1-9 cho hầu hết, 1-19 cho zstd)
+BACKUP_COMPRESSION_LEVEL=6   # Compression level (1-9 for most, 1-19 for zstd)
 
-# Mã hóa  
+# Encryption
 BACKUP_ENCRYPTION=aes        # none, aes, gpg
 ENCRYPTION_PASSWORD=your_password
 ```
 
-## Các Hàm Helper Mới
+## New Helper Functions
 
 ### `Helper::createXbkFilename()`
 
-Tạo tên file với marker `.xbk` dựa trên phương pháp nén và mã hóa.
+Creates filename with `.xbk` marker based on compression and encryption methods.
 
 ```php
 $filename = Helper::createXbkFilename(
-    'user.2025-01-01_12-00-00.tar',  // File gốc
-    'gzip',                          // Phương pháp nén
-    'aes'                           // Phương pháp mã hóa
+    'user.2025-01-01_12-00-00.tar',  // Original file
+    'gzip',                          // Compression method
+    'aes'                           // Encryption method
 );
-// Kết quả: user.2025-01-01_12-00-00.tar.xbk.gz.aes
+// Result: user.2025-01-01_12-00-00.tar.xbk.gz.aes
 ```
 
 ### `Helper::parseXbkFilename()`
 
-Phân tích tên file để xác định phương pháp xử lý.
+Analyzes filename to determine processing method.
 
 ```php
 $info = Helper::parseXbkFilename('user.2025-01-01_12-00-00.tar.xbk.gz.aes');
-// Kết quả:
+// Result:
 // [
 //     'original' => 'user.2025-01-01_12-00-00.tar',
 //     'compression' => 'gz',
@@ -157,25 +157,25 @@ $info = Helper::parseXbkFilename('user.2025-01-01_12-00-00.tar.xbk.gz.aes');
 
 ### `Helper::getOriginalFilename()`
 
-Lấy tên file gốc từ file đã xử lý.
+Gets original filename from processed file.
 
 ```php
 $original = Helper::getOriginalFilename('user.2025-01-01_12-00-00.tar.xbk.gz.aes');
-// Kết quả: user.2025-01-01_12-00-00.tar
+// Result: user.2025-01-01_12-00-00.tar
 ```
 
-## Tương Thích Ngược
+## Backward Compatibility
 
-Hệ thống vẫn hỗ trợ các file backup cũ không có marker `.xbk` thông qua logic legacy trong `download.php`. Tuy nhiên, khuyến nghị sử dụng định dạng mới cho tất cả backup mới.
+The system still supports old backup files without the `.xbk` marker through legacy logic in `download.php`. However, it's recommended to use the new format for all new backups.
 
-## Lưu Ý Quan Trọng
+## Important Notes
 
-1. **Thứ tự xử lý**: Luôn nén trước, mã hóa sau khi backup. Và ngược lại khi khôi phục: giải mã trước, giải nén sau.
+1. **Processing order**: Always compress first, then encrypt during backup. And vice versa during restoration: decrypt first, then decompress.
 
-2. **Marker .xbk**: Được chèn giữa tên file gốc và phần mở rộng xử lý để dễ dàng nhận diện.
+2. **Marker .xbk**: Inserted between the original filename and processing extensions for easy identification.
 
-3. **Tương thích**: File không có `.xbk` vẫn được xử lý theo logic cũ để đảm bảo tương thích ngược.
+3. **Compatibility**: Files without `.xbk` are still processed using old logic to ensure backward compatibility.
 
-4. **Bảo mật**: Mật khẩu mã hóa phải được lưu trữ an toàn trong biến môi trường `ENCRYPTION_PASSWORD`.
+4. **Security**: Encryption password must be stored securely in the `ENCRYPTION_PASSWORD` environment variable.
 
-5. **Test**: Luôn test quy trình backup và restore trước khi triển khai production.
+5. **Testing**: Always test backup and restore processes before production deployment.

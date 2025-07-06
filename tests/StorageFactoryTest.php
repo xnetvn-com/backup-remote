@@ -18,6 +18,9 @@
 use PHPUnit\Framework\TestCase;
 use App\Storage\StorageFactory;
 
+/**
+ * @covers AppStorageStorageFactory
+ */
 class StorageFactoryTest extends TestCase
 {
     public function testFtpPassiveOptionCastsToBoolean()

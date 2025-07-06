@@ -9,6 +9,9 @@ use PHPUnit\Framework\TestCase;
 use App\System\SystemChecker;
 use Psr\Log\LoggerInterface;
 
+/**
+ * @covers AppSystemSystemChecker
+ */
 class SystemCheckerTest extends TestCase
 {
     public function test_runChecks_should_not_throw_with_valid_config()

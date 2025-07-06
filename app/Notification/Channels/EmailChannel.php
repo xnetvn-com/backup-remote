@@ -13,34 +13,37 @@ namespace App\Notification\Channels;
 // Note: You might need to run `composer require phpmailer/phpmailer` in libs/
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use Monolog\Logger;
 
 class EmailChannel
 {
-    private $config;
+    private array $config;
+    private Logger $logger;
 
-    public function __construct($config)
+    public function __construct(array $config, Logger $logger)
     {
         $this->config = $config;
+        $this->logger = $logger;
     }
 
-    public function getName()
+    public function getName(): string
     {
         return 'email';
     }
 
-    public function send($level, $subject, $message, $details = null)
+    public function send(string $level, string $subject, string $message, ?string $details = null): void
     {
         $mail = new PHPMailer(true);
         try {
             $mail->isSMTP();
-            $mail->Host = $this->config['EMAIL_SMTP_HOST'];
+            $mail->Host = $this->config['EMAIL_SMTP_HOST'] ?? '';
             $mail->SMTPAuth = true;
-            $mail->Username = $this->config['EMAIL_SMTP_USER'];
-            $mail->Password = $this->config['EMAIL_SMTP_PASS'];
+            $mail->Username = $this->config['EMAIL_SMTP_USER'] ?? '';
+            $mail->Password = $this->config['EMAIL_SMTP_PASS'] ?? '';
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = 587;
-            $mail->setFrom($this->config['EMAIL_SMTP_USER']);
-            $mail->addAddress($this->config['ADMIN_EMAIL']);
+            $mail->setFrom($this->config['EMAIL_SMTP_USER'] ?? 'noreply@example.com');
+            $mail->addAddress($this->config['ADMIN_EMAIL'] ?? 'admin@example.com');
             $mail->Subject = $subject;
             $mail->Body = $message . ($details ? "\n\n" . $details : '');
             $mail->send();

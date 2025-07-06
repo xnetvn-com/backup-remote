@@ -25,7 +25,7 @@ class AlertThrottler
         }
     }
 
-    public function canSend($channel)
+    public function canSend(string $channel): bool
     {
         $last = $this->state[$channel] ?? 0;
         return (time() - $last) > $this->interval * 60;
@@ -35,7 +35,7 @@ class AlertThrottler
      * Mark that a notification was sent on a channel (thread-safe implementation)
      * SECURITY FIX: Added proper file locking to prevent race conditions
      */
-    public function markSent($channel): void
+    public function markSent(string $channel): void
     {
         $this->state[$channel] = time();
         $this->writeStateFileSafely();

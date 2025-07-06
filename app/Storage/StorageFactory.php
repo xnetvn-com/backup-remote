@@ -33,10 +33,11 @@ class StorageFactory
      * Creates a Filesystem instance for a specific storage type.
      * @param string $type s3|b2|ftp|local
      * @param array $config
+     * @param LoggerInterface|null $logger
      * @return Filesystem|null
      */
 
-    public static function create(string $type, array $config): ?Filesystem
+    public static function create(string $type, array $config, ?LoggerInterface $logger = null): ?Filesystem
     {
         switch ($type) {
             case 's3':
