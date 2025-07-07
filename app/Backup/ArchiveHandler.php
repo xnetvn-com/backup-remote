@@ -68,6 +68,11 @@ class ArchiveHandler
                 $this->logger->warning("No backup files found in root directory: {$userPath}");
                 return null;
             }
+            // Sort and limit to latest backups
+            usort($backupFiles, fn($a, $b) => filemtime($b) <=> filemtime($a));
+            $keepN = (int) ($this->config['rotation']['policies']['keep_latest'] ?? Helper::env('ROTATION_KEEP_LATEST', 7));
+            $this->logger->info("Limiting to latest {$keepN} files in root backup: found " . count($backupFiles));
+            $backupFiles = array_slice($backupFiles, 0, $keepN);
             $processedFiles = [];
             foreach ($backupFiles as $file) {
                 $fileSize = filesize($file) ?: 0;
@@ -90,26 +95,24 @@ class ArchiveHandler
                 if ($remoteStorages && $this->checkRemoteFileExists($finalFilename, $remoteStorages, $threshold)) {
                     $this->logger->info("Skipping processing for {$file}: final backup already exists on remote storage(s)");
                     
-                    // Create a placeholder or copy to maintain consistency
-                    if (!file_exists($finalPath)) {
-                        // Create a temporary placeholder to maintain workflow
-                        touch($finalPath);
-                        $this->logger->debug("Created placeholder file: {$finalPath}");
-                    }
-                    $processedFiles[] = $finalPath;
+                    // Skip adding to processedFiles since file already exists on remote - no need to upload
                     continue;
                 }
 
                 // Copy the original file to tmp (preserve source files)
-                if (!file_exists($tmpFile)) {
-                    if (@copy($file, $tmpFile)) {
-                        $this->logger->info("Copied file {$file} to tmp: {$tmpFile}");
-                    } else {
-                        $this->logger->error("Failed to copy file {$file} to tmp: {$tmpFile}");
-                        continue;
-                    }
-                } else {
-                    $this->logger->warning("Tmp file already exists: {$tmpFile}, skipping copy.");
+                $tmpDir = \App\Utils\Helper::getTmpDir();
+                $realTmpDir = realpath($tmpDir) ?: $tmpDir;
+                $realFile = realpath($file);
+                if (!$realFile || !str_starts_with($realFile, realpath(dirname($file)))) {
+                    $this->logger->error("Invalid or unsafe file path: {$file}");
+                    continue;
+                }
+                $tmpFile = rtrim($realTmpDir, '/') . '/' . basename($file);
+                
+                // Actually copy the file to tmp directory
+                if (!@copy($realFile, $tmpFile)) {
+                    $this->logger->error("Failed to copy {$realFile} to {$tmpFile}");
+                    continue;
                 }
 
                 // Create .xbk filename based on compression and encryption
@@ -137,8 +140,9 @@ class ArchiveHandler
                         $processedFiles[] = $finalPath;
                     } else {
                         $this->logger->error("Failed to compress and encrypt {$tmpFile} with 7z");
-                        continue;
                     }
+                    // Cleanup temporary file
+                    @unlink($tmpFile);
                 } elseif ($compression === 'zip' && $encryption === 'zip') {
                     // zip can compress and encrypt in one step
                     $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
@@ -148,8 +152,9 @@ class ArchiveHandler
                         $processedFiles[] = $finalPath;
                     } else {
                         $this->logger->error("Failed to compress and encrypt {$tmpFile} with zip");
-                        continue;
                     }
+                    // Cleanup temporary file
+                    @unlink($tmpFile);
                 } else {
                     // Separate compression and encryption steps
 
@@ -180,6 +185,7 @@ class ArchiveHandler
 
                         if (!$ok) {
                             $this->logger->error("Failed to compress {$tmpFile} with {$compression}");
+                            @unlink($tmpFile);
                             continue;
                         }
                         $this->logger->info("Compressed {$tmpFile} to {$compressedFile} using {$compression}");
@@ -188,6 +194,7 @@ class ArchiveHandler
                         $compressedFile = $tmpFile . '.xbk';
                         if (!@copy($tmpFile, $compressedFile)) {
                             $this->logger->error("Failed to create .xbk marker file: {$compressedFile}");
+                            @unlink($tmpFile);
                             continue;
                         }
                     }
@@ -217,12 +224,16 @@ class ArchiveHandler
                             }
                         } else {
                             $this->logger->error("Failed to encrypt {$compressedFile} with {$encryption}");
+                            @unlink($tmpFile);
                             continue;
                         }
                     }
 
                     $processedFiles[] = $encryptedFile;
                 }
+                
+                // Cleanup temporary file
+                @unlink($tmpFile);
             }
             return $processedFiles;
         }
@@ -250,11 +261,8 @@ class ArchiveHandler
         // For directory archives, default threshold 0 (any existing remote)
         if ($remoteStorages && $this->checkRemoteFileExists($finalFilename, $remoteStorages, 0)) {
             $this->logger->info("Skipping archive creation for user '{$username}': final backup already exists on remote storage(s)");
-            if (!file_exists($finalArchivePath)) {
-                touch($finalArchivePath);
-                $this->logger->debug("Created placeholder file for user '{$username}': {$finalArchivePath}");
-            }
-            return $finalArchivePath;
+            // Return null to indicate no local file needs to be uploaded
+            return null;
         }
 
         $this->logger->info("Preparing to create archive for user '{$username}' at '{$finalArchivePath}'.");

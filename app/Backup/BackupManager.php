@@ -304,6 +304,15 @@ class BackupManager
 
     private function cleanupLocal(string $archivePath, bool $isDryRun): void
     {
+        // Protect source directories: only delete files in temp directory
+        $tmpDir = $this->config['local']['temp_dir'] ?? \App\Utils\Helper::getTmpDir();
+        $realTmp = realpath($tmpDir) ?: $tmpDir;
+        $realArchive = realpath($archivePath) ?: $archivePath;
+        if (!str_starts_with($realArchive, $realTmp)) {
+            $this->logger->warning("Skipping deletion of non-temp file: {$archivePath}");
+            return;
+        }
+        
         $this->logger->info("Cleaning up local archive: {$archivePath}");
         if ($isDryRun) {
             $this->logger->info('[DRY-RUN] Skipping local file deletion.');

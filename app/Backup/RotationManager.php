@@ -43,7 +43,8 @@ class RotationManager
 
     public function run(bool $isDryRun): void
     {
-        $policies = $this->config['rotation']['policies'];
+        // Use direct keep_latest setting for retention
+        $keepCount = (int) ($this->config['rotation']['keep_latest'] ?? 7);
         $remotePath = $this->config['remote']['path'] ?? '';
 
         $this->logger->info("Starting backup rotation process" . ($isDryRun ? " [DRY-RUN MODE]" : ""));
@@ -82,7 +83,7 @@ class RotationManager
         
         foreach ($groups as $username => $userFiles) {
             $this->logger->info("Processing rotation for user: {$username}");
-            $this->applyPolicies($username, $userFiles, $policies, $isDryRun);
+            $this->applyPolicies($username, $userFiles, $keepCount, $isDryRun);
         }
         
         $processEndTime = microtime(true);
@@ -121,7 +122,7 @@ class RotationManager
         return $groups;
     }
 
-    private function applyPolicies(string $username, array $files, array $policies, bool $isDryRun): void
+    private function applyPolicies(string $username, array $files, int $keepCount, bool $isDryRun): void
     {
         $fileCount = count($files);
         $this->logger->info("Applying retention policies for user '{$username}' ({$fileCount} total files)");
@@ -132,9 +133,8 @@ class RotationManager
         $keep = [];
         $delete = [];
 
-        // Apply policies (e.g., keep daily, weekly, monthly)
-        // For simplicity, we'll just keep the latest N backups for now.
-        $keepCount = $policies['keep_latest'] ?? 7;
+        // Apply retention: keep the latest N backups
+        // $keepCount passed as argument
 
         $this->logger->info("Retention policy for {$username}: Keep latest {$keepCount} backups from {$fileCount} total files");
 
