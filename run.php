@@ -26,8 +26,9 @@ use App\Utils\Logger;
 use Dotenv\Dotenv;
 
 // --- Argument Parsing ---
-$options = getopt('', ['dry-run']);
+$options = getopt('f', ['dry-run', 'force']);
 $isDryRun = isset($options['dry-run']);
+$isForce = isset($options['f']) || isset($options['force']);
 
 // --- Bootstrap ---
 require_once __DIR__ . '/libs/vendor/autoload.php';
@@ -84,10 +85,14 @@ try {
     $lockAcquired = true;
 
     // 2. System Checks
-    $logger->info("Performing system checks...");
-    $systemChecker = new SystemChecker($config, $logger);
-    $systemChecker->runChecks();
-    $logger->info("System checks passed successfully.");
+    if ($isForce) {
+        $logger->warning("Force mode enabled: Skipping all system checks (CPU, disk, time window, etc.)");
+    } else {
+        $logger->info("Performing system checks...");
+        $systemChecker = new SystemChecker($config, $logger);
+        $systemChecker->runChecks();
+        $logger->info("System checks passed successfully.");
+    }
 
     // 3. Execute Backup
     $logger->info("Starting backup process...");

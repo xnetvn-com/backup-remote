@@ -34,10 +34,11 @@ class ArchiveHandler
      * @param string $username The user to back up.
      * @param string $userPath The path to the user's home directory.
      * @param bool $isDryRun If true, simulates the process.
+     * @param array|null $remoteStorages Optional array of remote storages to check for existing files
      * @return string|array|null The path(s) to the created archive(s), or null on failure/dry-run.
      * @throws \Exception
      */
-    public function create(string $username, string $userPath, bool $isDryRun): string|array|null
+    public function create(string $username, string $userPath, bool $isDryRun, ?array $remoteStorages = null): string|array|null
     {
         $tempDir = Helper::getTmpDir();
         // Get encryption password from environment (ENCRYPTION_PASSWORD or fallback to BACKUP_PASSWORD)
@@ -69,9 +70,36 @@ class ArchiveHandler
             }
             $processedFiles = [];
             foreach ($backupFiles as $file) {
-                $basename = basename($file);
-                $tmpFile = rtrim($tempDir, '/') . '/' . $basename;
+                $fileSize = filesize($file) ?: 0;
+                $this->logger->info("Processing file: {$file} (size: " . number_format($fileSize) . " bytes)");
+                $tmpFile = rtrim($tempDir, '/') . '/' . basename($file);
+
+                // Create expected final filename
+                $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
+                $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
                 
+                // Check if final output already exists locally
+                if (file_exists($finalPath) && (filesize($finalPath) > ceil($fileSize * 0.5))) {
+                    $this->logger->info("Skipping compress/encrypt for {$file}: output already exists locally: {$finalPath}");
+                    $processedFiles[] = $finalPath;
+                    continue;
+                }
+                
+                // Check remote existence with size threshold: only skip if remote file size >= 50% of original
+                $threshold = (int) ceil($fileSize * 0.5);
+                if ($remoteStorages && $this->checkRemoteFileExists($finalFilename, $remoteStorages, $threshold)) {
+                    $this->logger->info("Skipping processing for {$file}: final backup already exists on remote storage(s)");
+                    
+                    // Create a placeholder or copy to maintain consistency
+                    if (!file_exists($finalPath)) {
+                        // Create a temporary placeholder to maintain workflow
+                        touch($finalPath);
+                        $this->logger->debug("Created placeholder file: {$finalPath}");
+                    }
+                    $processedFiles[] = $finalPath;
+                    continue;
+                }
+
                 // Copy the original file to tmp (preserve source files)
                 if (!file_exists($tmpFile)) {
                     if (@copy($file, $tmpFile)) {
@@ -83,21 +111,21 @@ class ArchiveHandler
                 } else {
                     $this->logger->warning("Tmp file already exists: {$tmpFile}, skipping copy.");
                 }
-                
+
                 // Create .xbk filename based on compression and encryption
                 $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
                 $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
-                
+
                 if ($isDryRun) {
                     $this->logger->info("[DRY-RUN] Would process {$tmpFile} to {$finalPath} (compression: {$compression}, encryption: {$encryption})");
                     $processedFiles[] = $finalPath;
                     continue;
                 }
-                
+
                 // Create final filename based on compression and encryption combination
                 $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
                 $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
-                
+
                 // Special handling for combined compression+encryption methods
                 $this->logger->debug("Checking combined methods: compression='{$compression}', encryption='{$encryption}'");
                 if (($compression === '7z' || $compression === '7zip') && ($encryption === '7z' || $encryption === '7zip')) {
@@ -124,7 +152,7 @@ class ArchiveHandler
                     }
                 } else {
                     // Separate compression and encryption steps
-                    
+
                     // Step 1: Apply compression first (if enabled)
                     $compressedFile = $tmpFile;
                     if ($compression !== 'none') {
@@ -139,7 +167,7 @@ class ArchiveHandler
                         };
                         $compressedFile = $tmpFile . '.xbk.' . $compExt;
                         $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
-                        
+
                         $ok = match ($compression) {
                             'gzip', 'gz' => Helper::gzipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
                             'bzip2', 'bz2' => Helper::bzip2CompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
@@ -149,7 +177,7 @@ class ArchiveHandler
                             '7z', '7zip' => Helper::sevenZipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 5),
                             default => Helper::gzipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
                         };
-                        
+
                         if (!$ok) {
                             $this->logger->error("Failed to compress {$tmpFile} with {$compression}");
                             continue;
@@ -163,7 +191,7 @@ class ArchiveHandler
                             continue;
                         }
                     }
-                    
+
                     // Step 2: Apply encryption (if enabled)
                     $encryptedFile = $compressedFile;
                     if ($encryption !== 'none') {
@@ -173,12 +201,12 @@ class ArchiveHandler
                             default => 'aes',
                         };
                         $encryptedFile = $compressedFile . '.' . $encExt;
-                        
+
                         $ok = match ($encryption) {
                             'gpg', 'gpg2', 'gnupg' => Helper::gpgEncryptFile($compressedFile, $encryptedFile, $password),
                             default => Helper::encryptFile($compressedFile, $encryptedFile, $password),
                         };
-                        
+
                         if ($ok) {
                             $size = is_file($encryptedFile) ? filesize($encryptedFile) : 0;
                             $this->logger->info("Encrypted {$compressedFile} to {$encryptedFile} using {$encryption}, size={$size}");
@@ -192,7 +220,7 @@ class ArchiveHandler
                             continue;
                         }
                     }
-                    
+
                     $processedFiles[] = $encryptedFile;
                 }
             }
@@ -212,8 +240,20 @@ class ArchiveHandler
         $finalFilename = Helper::createXbkFilename($originalBasename, $compression, $encryption);
         $finalArchivePath = rtrim($tempDir, '/') . '/' . $finalFilename;
 
+        // Check if archive already exists locally
         if (file_exists($finalArchivePath) && filesize($finalArchivePath) > 0) {
             $this->logger->info("Archive already exists for user '{$username}' at '{$finalArchivePath}'. Skipping archive creation.");
+            return $finalArchivePath;
+        }
+        
+        // Check if file already exists on remote storages (optimization)
+        // For directory archives, default threshold 0 (any existing remote)
+        if ($remoteStorages && $this->checkRemoteFileExists($finalFilename, $remoteStorages, 0)) {
+            $this->logger->info("Skipping archive creation for user '{$username}': final backup already exists on remote storage(s)");
+            if (!file_exists($finalArchivePath)) {
+                touch($finalArchivePath);
+                $this->logger->debug("Created placeholder file for user '{$username}': {$finalArchivePath}");
+            }
             return $finalArchivePath;
         }
 
@@ -226,7 +266,7 @@ class ArchiveHandler
         try {
             $this->logger->debug("Creating archive...");
             $exclude = $this->config['archive']['exclude'] ?? [];
-            
+
             // Special handling for combined compression+encryption methods
             $this->logger->debug("Checking combined methods for user backup: compression='{$compression}', encryption='{$encryption}'");
             if (($compression === '7z' || $compression === '7zip') && ($encryption === '7z' || $encryption === '7zip')) {
@@ -248,12 +288,12 @@ class ArchiveHandler
                 $this->logger->info("Archive for {$username} created, compressed and encrypted with zip in one step.");
                 return $finalArchivePath;
             }
-            
+
             // For other combinations, use separate steps
             // Always create tar for all except zip/7z
             $needTar = !in_array($compression, ['zip', '7z', '7zip']);
             $tarPath = rtrim($tempDir, '/') . '/' . $originalBasename;
-            
+
             if ($needTar) {
                 $result = \wapmorgan\UnifiedArchive\UnifiedArchive::archiveDirectory(
                     $userPath,
@@ -281,7 +321,7 @@ class ArchiveHandler
                 };
                 $compressedPath = rtrim($tempDir, '/') . '/' . $baseFileName . '.xbk.' . $compExt;
                 $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
-                
+
                 $ok = match ($compression) {
                     'zstd', 'zst' => Helper::zstdCompressFile($tarPath, $compressedPath, $compressionLevel ?? 19),
                     'gzip', 'gz' => Helper::gzipCompressFile($tarPath, $compressedPath, $compressionLevel ?? 6),
@@ -291,7 +331,7 @@ class ArchiveHandler
                     '7z', '7zip' => Helper::sevenZipCompressFile($userPath, $compressedPath, $compressionLevel ?? 5),
                     default => Helper::gzipCompressFile($tarPath, $compressedPath, $compressionLevel ?? 6),
                 };
-                
+
                 if (!$ok) {
                     $this->logger->error("Failed to compress archive with {$compression}: {$tarPath}");
                     return null;
@@ -315,12 +355,12 @@ class ArchiveHandler
                     default => 'aes',
                 };
                 $encryptedFile = $compressedPath . '.' . $encExt;
-                
+
                 $ok = match ($encryption) {
                     'gpg', 'gpg2', 'gnupg' => Helper::gpgEncryptFile($compressedPath, $encryptedFile, $password),
                     default => Helper::encryptFile($compressedPath, $encryptedFile, $password),
                 };
-                
+
                 if ($ok) {
                     $size = is_file($encryptedFile) ? filesize($encryptedFile) : 0;
                     $this->logger->info("Encrypted archive {$compressedPath} to {$encryptedFile} using {$encryption}, size={$size}");
@@ -334,11 +374,57 @@ class ArchiveHandler
                     return null;
                 }
             }
-            
+
             return $encryptedFile;
         } catch (\Throwable $e) {
             $this->logger->error("Failed to create archive for {$username}: " . $e->getMessage(), ['exception' => $e]);
             throw new \Exception("Failed to create archive for {$username}: " . $e->getMessage(), 0, $e);
         }
+    }
+
+    /**
+     * Check if a file exists on any of the remote storages and meets size threshold
+     *
+     * @param string $filename The filename to check
+     * @param array $remoteStorages Array of remote storage instances
+     * @param int $minSize Minimum required size in bytes on remote to consider as existing
+     * @return bool True if file exists on all remotes with size >= minSize
+     */
+    private function checkRemoteFileExists(string $filename, array $remoteStorages, int $minSize = 0): bool
+    {
+        $existsOnRemotes = [];
+        $totalRemotes = count($remoteStorages);
+        foreach ($remoteStorages as $storageInfo) {
+            try {
+                $remotePath = ($this->config['remote']['path'] ?? '') . '/' . basename($filename);
+                if ($storageInfo['storage']->fileExists($remotePath)) {
+                    try {
+                        $remoteSize = $storageInfo['storage']->fileSize($remotePath);
+                        if ($remoteSize >= $minSize) {
+                            $this->logger->debug("File {$filename} exists on remote storage {$storageInfo['driver']} (size: " . number_format($remoteSize) . " bytes >= threshold: " . number_format($minSize) . " bytes)");
+                            $existsOnRemotes[] = $storageInfo['driver'];
+                        } else {
+                            $this->logger->debug("File {$filename} exists on remote storage {$storageInfo['driver']} but is below threshold (size: " . number_format($remoteSize) . " bytes < threshold: " . number_format($minSize) . " bytes)");
+                        }
+                    } catch (\Throwable $e) {
+                        $this->logger->debug("File {$filename} exists on remote storage {$storageInfo['driver']} but could not get size: " . $e->getMessage());
+                        // Assume existence when size check fails
+                        $existsOnRemotes[] = $storageInfo['driver'];
+                    }
+                } else {
+                    $this->logger->debug("File {$filename} does not exist on remote storage {$storageInfo['driver']}");
+                }
+            } catch (\Throwable $e) {
+                $this->logger->debug("Could not check file existence on {$storageInfo['driver']}: " . $e->getMessage());
+            }
+        }
+        $existsCount = count($existsOnRemotes);
+        if ($existsCount > 0) {
+            $this->logger->info("File {$filename} exists on {$existsCount}/{$totalRemotes} remote storage(s): " . implode(', ', $existsOnRemotes));
+            // Return true only if all remotes satisfy existence and size threshold
+            return $existsCount === $totalRemotes;
+        }
+        $this->logger->debug("File {$filename} does not exist on any remote storage");
+        return false; // none met existence & threshold
     }
 }

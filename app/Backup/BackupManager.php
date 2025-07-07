@@ -88,21 +88,111 @@ class BackupManager
 
         $tmpDir = \App\Utils\Helper::getTmpDir();
 
+        // Determine compression/encryption methods
+        $compression = \App\Utils\Helper::env('BACKUP_COMPRESSION', 'none');
+        $encryption  = \App\Utils\Helper::env('BACKUP_ENCRYPTION', 'none');
+
         foreach ($usersToBackup as $username => $userPath) {
             $this->logger->info("--- Starting backup for user: {$username} ---");
+
+            // Pre-check: skip if remote already has this backup on all remotes
+            $expectedFilename = basename(\App\Utils\Helper::createXbkFilename($userPath, $compression, $encryption));
+            $this->logger->info("Checking if backup file already exists on remote storages: {$expectedFilename}");
+            
+            $remoteFilesStatus = [];
+            $allExist = true;
+            $anyExists = false;
+            
+            foreach ($storages as $storageInfo) {
+                $driver = $storageInfo['driver'];
+                $remotePath = ($this->config['remote']['path'] ?? '') . '/' . $expectedFilename;
+                
+                try {
+                    $exists = $storageInfo['storage']->fileExists($remotePath);
+                    $remoteFilesStatus[$driver] = [
+                        'exists' => $exists,
+                        'path' => $remotePath,
+                        'size' => null
+                    ];
+                    
+                    if ($exists) {
+                        $anyExists = true;
+                        try {
+                            $remoteSize = $storageInfo['storage']->fileSize($remotePath);
+                            $remoteFilesStatus[$driver]['size'] = $remoteSize;
+                            $this->logger->info("Remote file exists on {$driver}: {$remotePath} (size: " . number_format($remoteSize) . " bytes)");
+                        } catch (\Throwable $e) {
+                            $this->logger->warning("Could not get file size for {$remotePath} on {$driver}: " . $e->getMessage());
+                            $remoteFilesStatus[$driver]['size'] = 'unknown';
+                        }
+                    } else {
+                        $allExist = false;
+                        $this->logger->info("Remote file does not exist on {$driver}: {$remotePath}");
+                    }
+                } catch (\Throwable $e) {
+                    $allExist = false;
+                    $this->logger->warning("Could not check file existence on {$driver}: " . $e->getMessage());
+                    $remoteFilesStatus[$driver] = [
+                        'exists' => false,
+                        'path' => $remotePath,
+                        'size' => null,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+            
+            // Log summary of remote file status
+            $existingCount = array_sum(array_map(fn($status) => $status['exists'] ? 1 : 0, $remoteFilesStatus));
+            $totalRemotes = count($storages);
+            $this->logger->info("Remote file status summary for {$username}: {$existingCount}/{$totalRemotes} remotes have the backup file");
+            
+            if ($allExist) {
+                $this->logger->info("Skipping backup for user {$username}: backup file exists on all remote storages ({$expectedFilename})");
+                continue;
+            } elseif ($anyExists) {
+                $this->logger->info("Partial backup exists for user {$username}: will process and upload to missing remotes only");
+            } else {
+                $this->logger->info("No existing backup found for user {$username}: will create new backup and upload to all remotes");
+            }
+
             try {
-                $archivePath = $archiveHandler->create($username, $userPath, $isDryRun);
+                $archivePath = $archiveHandler->create($username, $userPath, $isDryRun, $storages);
 
                 if ($archivePath) {
                     $archiveFiles = is_array($archivePath) ? $archivePath : [$archivePath];
                     foreach ($archiveFiles as $filePath) {
                         $allUploadsOk = true;
+                        $filename = basename($filePath);
+                        
+                        $this->logger->info("Processing archive file for upload: {$filename}");
+                        
                         foreach ($storages as $storageInfo) {
-                            try {
-                                $this->uploadBackup($storageInfo['storage'], $filePath, $isDryRun, $storageInfo['driver']);
-                            } catch (\Throwable $e) {
-                                $allUploadsOk = false;
-                                $this->logger->error("Upload failed for file {$filePath} to remote {$storageInfo['driver']}: " . $e->getMessage());
+                            $driver = $storageInfo['driver'];
+                            
+                            // Check if this specific remote already has the file (from our earlier check)
+                            $skipUpload = false;
+                            if (isset($remoteFilesStatus[$driver]) && $remoteFilesStatus[$driver]['exists']) {
+                                if ($remoteFilesStatus[$driver]['size'] !== null && $remoteFilesStatus[$driver]['size'] !== 'unknown') {
+                                    $localSize = filesize($filePath);
+                                    if ($remoteFilesStatus[$driver]['size'] === $localSize) {
+                                        $this->logger->info("Skipping upload to {$driver}: file already exists with matching size ({$localSize} bytes)");
+                                        $skipUpload = true;
+                                    } else {
+                                        $this->logger->warning("File exists on {$driver} but size differs (remote: {$remoteFilesStatus[$driver]['size']}, local: {$localSize}). Will re-upload.");
+                                    }
+                                } else {
+                                    $this->logger->info("File exists on {$driver} but size unknown. Will attempt upload with size verification.");
+                                }
+                            }
+                            
+                            if (!$skipUpload) {
+                                try {
+                                    $this->uploadBackup($storageInfo['storage'], $filePath, $isDryRun, $driver);
+                                    $this->logger->info("Successfully uploaded {$filename} to {$driver}");
+                                } catch (\Throwable $e) {
+                                    $allUploadsOk = false;
+                                    $this->logger->error("Upload failed for file {$filename} to remote {$driver}: " . $e->getMessage());
+                                }
                             }
                         }
                         // Only cleanup if all uploads succeeded and file is in TMP_DIR
@@ -147,7 +237,9 @@ class BackupManager
     private function uploadBackup(Filesystem $storage, string $archivePath, bool $isDryRun, string $driver = ''): void
     {
         $remotePath = ($this->config['remote']['path'] ?? '') . '/' . basename($archivePath);
-        $this->logger->info("Uploading '{$archivePath}' to '{$remotePath}' on driver '{$driver}'.");
+        $localSize = filesize($archivePath);
+        
+        $this->logger->info("Uploading '{$archivePath}' to '{$remotePath}' on driver '{$driver}' (local size: " . number_format($localSize) . " bytes)");
 
         if ($isDryRun) {
             $this->logger->info('[DRY-RUN] Skipping actual upload.');
@@ -158,42 +250,54 @@ class BackupManager
         try {
             if ($storage->fileExists($remotePath)) {
                 $remoteSize = $storage->fileSize($remotePath);
-                $localSize = filesize($archivePath);
                 if ($remoteSize === $localSize) {
-                    $this->logger->info("Remote file '{$remotePath}' already exists with matching size. Skipping upload.");
+                    $this->logger->info("Remote file '{$remotePath}' already exists with matching size (" . number_format($remoteSize) . " bytes). Skipping upload.");
                     return;
                 } else {
-                    $this->logger->warning("Remote file '{$remotePath}' exists but size differs (remote: {$remoteSize}, local: {$localSize}). Overwriting.");
+                    $this->logger->warning("Remote file '{$remotePath}' exists but size differs (remote: " . number_format($remoteSize) . " bytes, local: " . number_format($localSize) . " bytes). Overwriting.");
                 }
+            } else {
+                $this->logger->info("Remote file '{$remotePath}' does not exist. Proceeding with upload.");
             }
         } catch (\Throwable $e) {
-            $this->logger->warning("Could not check remote file existence: " . $e->getMessage());
+            $this->logger->warning("Could not check remote file existence for '{$remotePath}': " . $e->getMessage());
         }
 
+        $this->logger->debug("Opening local file for reading: {$archivePath}");
         $stream = fopen($archivePath, 'r');
         if ($stream === false) {
             throw new \Exception("Failed to open archive file for reading: {$archivePath}");
         }
 
         try {
+            $this->logger->debug("Starting upload stream to '{$remotePath}'");
+            $uploadStartTime = microtime(true);
+            
             $storage->writeStream($remotePath, $stream);
+            
+            $uploadEndTime = microtime(true);
+            $uploadDuration = round($uploadEndTime - $uploadStartTime, 2);
+            $uploadSpeed = $localSize > 0 ? round($localSize / $uploadDuration / 1024 / 1024, 2) : 0;
+            
+            $this->logger->info("Upload completed in {$uploadDuration}s at {$uploadSpeed} MB/s");
+            
             // Check file size after upload
-            $localSize = filesize($archivePath);
             try {
                 $remoteSize = $storage->fileSize($remotePath);
+                if ($remoteSize !== $localSize) {
+                    $this->logger->error("Remote file size (" . number_format($remoteSize) . " bytes) does not match local file size (" . number_format($localSize) . " bytes) for '{$remotePath}'.");
+                    throw new \Exception("Upload failed: remote file size does not match local file size for '{$remotePath}'.");
+                }
+                $this->logger->info("Upload successful to driver '{$driver}'. File size verified: " . number_format($localSize) . " bytes.");
             } catch (\Throwable $e) {
-                throw new \Exception("Failed to get remote file size after upload: " . $e->getMessage(), 0, $e);
+                throw new \Exception("Failed to verify remote file size after upload: " . $e->getMessage(), 0, $e);
             }
-            if ($remoteSize !== $localSize) {
-                $this->logger->error("Remote file size ({$remoteSize}) does not match local file size ({$localSize}) for '{$remotePath}'.");
-                throw new \Exception("Upload failed: remote file size does not match local file size for '{$remotePath}'.");
-            }
-            $this->logger->info("Upload successful to driver '{$driver}'. File size verified: {$localSize} bytes.");
         } catch (\Throwable $e) {
             throw new \Exception("Failed to upload to remote storage ({$driver}): " . $e->getMessage(), 0, $e);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
+                $this->logger->debug("Closed upload stream for '{$archivePath}'");
             }
         }
     }

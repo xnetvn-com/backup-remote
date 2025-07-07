@@ -46,37 +46,86 @@ class RotationManager
         $policies = $this->config['rotation']['policies'];
         $remotePath = $this->config['remote']['path'] ?? '';
 
+        $this->logger->info("Starting backup rotation process" . ($isDryRun ? " [DRY-RUN MODE]" : ""));
         $this->logger->info("Fetching file list from remote path: '{$remotePath}'");
-        $files = $this->storage->listContents($remotePath, true)
-            ->filter(fn (StorageAttributes $attributes) => $attributes->isFile())
-            ->sortByPath()
-            ->toArray();
+        
+        $startTime = microtime(true);
+        
+        try {
+            $files = $this->storage->listContents($remotePath, true)
+                ->filter(fn (StorageAttributes $attributes) => $attributes->isFile())
+                ->sortByPath()
+                ->toArray();
+        } catch (\Throwable $e) {
+            $this->logger->error("Failed to list remote files: " . $e->getMessage());
+            throw $e;
+        }
 
-        $this->logger->info("Found " . count($files) . " total files in remote storage.");
+        $listTime = microtime(true);
+        $listDuration = round($listTime - $startTime, 2);
+        
+        $this->logger->info("Found " . count($files) . " total files in remote storage (fetched in {$listDuration}s)");
+
+        if (empty($files)) {
+            $this->logger->info("No files found in remote storage. Nothing to rotate.");
+            return;
+        }
 
         $groups = $this->groupFilesByUser($files);
 
+        if (empty($groups)) {
+            $this->logger->warning("No files could be grouped by username. Check filename patterns.");
+            return;
+        }
+
+        $processStartTime = microtime(true);
+        
         foreach ($groups as $username => $userFiles) {
             $this->logger->info("Processing rotation for user: {$username}");
             $this->applyPolicies($username, $userFiles, $policies, $isDryRun);
         }
+        
+        $processEndTime = microtime(true);
+        $processDuration = round($processEndTime - $processStartTime, 2);
+        $totalDuration = round($processEndTime - $startTime, 2);
+        
+        $this->logger->info("Backup rotation completed in {$totalDuration}s (processing: {$processDuration}s, listing: {$listDuration}s)");
     }
 
     private function groupFilesByUser(array $files): array
     {
         $groups = [];
+        $totalFiles = count($files);
+        $this->logger->info("Grouping {$totalFiles} files by username for rotation analysis");
+        
         foreach ($files as $file) {
             // hestia-user.2025-06-28_10-30-00.tar.gz.xenc
             if (preg_match('/(.+?)\.\d{4}-\d{2}-\d{2}/i', basename($file['path']), $matches)) {
                 $username = $matches[1];
+                if (!isset($groups[$username])) {
+                    $groups[$username] = [];
+                }
                 $groups[$username][] = $file;
+                $this->logger->debug("Grouped file {$file['path']} under user: {$username}");
+            } else {
+                $this->logger->warning("Could not extract username from file: {$file['path']}");
             }
         }
+        
+        $userCount = count($groups);
+        $this->logger->info("Found backups for {$userCount} users");
+        foreach ($groups as $username => $userFiles) {
+            $this->logger->debug("User '{$username}' has " . count($userFiles) . " backup files");
+        }
+        
         return $groups;
     }
 
     private function applyPolicies(string $username, array $files, array $policies, bool $isDryRun): void
     {
+        $fileCount = count($files);
+        $this->logger->info("Applying retention policies for user '{$username}' ({$fileCount} total files)");
+        
         // Sort files by date, newest first
         usort($files, fn ($a, $b) => $b['lastModified'] <=> $a['lastModified']);
 
@@ -87,29 +136,55 @@ class RotationManager
         // For simplicity, we'll just keep the latest N backups for now.
         $keepCount = $policies['keep_latest'] ?? 7;
 
-        $this->logger->info("Retention policy for {$username}: Keep latest {$keepCount} backups.");
+        $this->logger->info("Retention policy for {$username}: Keep latest {$keepCount} backups from {$fileCount} total files");
 
         $keep = array_slice($files, 0, $keepCount);
         $delete = array_slice($files, $keepCount);
 
+        // Log details about files to keep
+        $this->logger->info("Files to keep for user '{$username}': " . count($keep));
+        foreach ($keep as $keepFile) {
+            $fileSize = isset($keepFile['fileSize']) ? number_format($keepFile['fileSize']) . ' bytes' : 'unknown size';
+            $this->logger->debug("KEEP: {$keepFile['path']} ({$fileSize})");
+        }
+
+        // Log details about files to delete
+        $deleteCount = count($delete);
+        $this->logger->info("Files to delete for user '{$username}': {$deleteCount}");
+        
         $keepPaths = array_map(fn ($f) => $f['path'], $keep);
+        $totalSizeToDelete = 0;
 
         foreach ($delete as $fileToDelete) {
             if (!in_array($fileToDelete['path'], $keepPaths)) {
-                $this->logger->info("Marked for deletion: {$fileToDelete['path']}");
+                $fileSize = isset($fileToDelete['fileSize']) ? $fileToDelete['fileSize'] : 0;
+                $totalSizeToDelete += $fileSize;
+                $fileSizeStr = $fileSize > 0 ? number_format($fileSize) . ' bytes' : 'unknown size';
+                
+                $this->logger->info("Marked for deletion: {$fileToDelete['path']} ({$fileSizeStr})");
+                
                 if (!$isDryRun) {
                     try {
                         $this->storage->delete($fileToDelete['path']);
-                        $this->logger->info("Deleted: {$fileToDelete['path']}");
+                        $this->logger->info("Successfully deleted: {$fileToDelete['path']}");
                     } catch (Throwable $e) {
                         $this->logger->error("Failed to delete {$fileToDelete['path']}: " . $e->getMessage());
                     }
+                } else {
+                    $this->logger->info("[DRY-RUN] Would delete: {$fileToDelete['path']}");
                 }
             }
         }
 
-        if (empty($delete)) {
-            $this->logger->info("No old backups to delete for user {$username}.");
+        if ($deleteCount === 0) {
+            $this->logger->info("No old backups to delete for user '{$username}' (within retention limit)");
+        } else {
+            $totalSizeStr = $totalSizeToDelete > 0 ? number_format($totalSizeToDelete) . ' bytes' : 'unknown total size';
+            if ($isDryRun) {
+                $this->logger->info("[DRY-RUN] Would delete {$deleteCount} files for user '{$username}' (total size: {$totalSizeStr})");
+            } else {
+                $this->logger->info("Rotation completed for user '{$username}': deleted {$deleteCount} files (total size: {$totalSizeStr})");
+            }
         }
     }
 }

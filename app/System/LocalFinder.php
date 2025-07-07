@@ -63,7 +63,7 @@ class LocalFinder
                     continue;
                 }
                 $path = $baseDir . '/' . $item;
-                if (is_dir($path)) {
+                if (is_dir($path) && (strpos($baseDir, '/home') === 0)) {
                     $users[$item] = $path;
                     $hasUser = true;
                 }
