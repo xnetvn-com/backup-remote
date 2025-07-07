@@ -67,3 +67,4 @@ libs/composer.lock
 *.dump
 *.csv
 *.dat
+backups/auto_update_20250707_170943
