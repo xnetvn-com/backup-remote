@@ -127,7 +127,7 @@ See [UPDATE_GUIDE.md](UPDATE_GUIDE.md) for detailed instructions.
    composer install --no-dev --optimize-autoloader
    cd ..
    ```
-   
+
    For development (with dev dependencies):
 
    ```bash
