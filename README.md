@@ -86,6 +86,31 @@ composer install --no-dev --optimize-autoloader
 cd ..
 ```
 
+### Auto-Update (Recommended)
+
+For safe and convenient updates to the latest version:
+
+```bash
+# Interactive update (recommended)
+./auto_update.sh
+
+# Automatic update without confirmation
+./auto_update.sh --force
+
+# Update from specific branch
+./auto_update.sh --branch=develop
+```
+
+The auto-update script provides:
+
+- ✅ **Automatic backup** before update
+- ✅ **Configuration preservation** (keeps your .env, configs, logs)
+- ✅ **Integrity verification** of downloaded files
+- ✅ **Automatic rollback** on failure
+- ✅ **Safe update process** with comprehensive error handling
+
+See [UPDATE_GUIDE.md](UPDATE_GUIDE.md) for detailed instructions.
+
 ### Quick Start
 
 1. Clone the repository and enter directory:
@@ -104,6 +129,7 @@ cd ..
    ```
    
    For development (with dev dependencies):
+
    ```bash
    cd libs
    composer install
