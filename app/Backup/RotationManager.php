@@ -168,18 +168,21 @@ class RotationManager
 
         foreach ($delete as $fileToDelete) {
             if (!in_array($fileToDelete['path'], $keepPaths)) {
-                $fileSize = isset($fileToDelete['fileSize']) ? $fileToDelete['fileSize'] : 0;
+                $path = $fileToDelete['path'];
+                $fileSize = $fileToDelete['fileSize'] ?? 0;
                 $totalSizeToDelete += $fileSize;
                 $fileSizeStr = $fileSize > 0 ? number_format($fileSize) . ' bytes' : 'unknown size';
                 
-                $this->logger->info("Marked for deletion: {$fileToDelete['path']} ({$fileSizeStr})");
-                
+                $this->logger->info("Marked for deletion: {$path} ({$fileSizeStr})");
                 if (!$isDryRun) {
+                    // Ensure only temp remote paths are deleted
                     try {
-                        $this->storage->delete($fileToDelete['path']);
-                        $this->logger->info("Successfully deleted: {$fileToDelete['path']}");
-                    } catch (Throwable $e) {
-                        $this->logger->error("Failed to delete {$fileToDelete['path']}: " . $e->getMessage());
+                        \App\Utils\Helper::assertInTmpDir($path);
+                        $this->storage->delete($path);
+                    } catch (\RuntimeException $e) {
+                        $this->logger->warning("Skipping deletion of non-temp path: {$path}");
+                    } catch (\Throwable $e) {
+                        $this->logger->warning("Failed to delete file on remote: {$path}");
                     }
                 } else {
                     $this->logger->info("[DRY-RUN] Would delete: {$fileToDelete['path']}");

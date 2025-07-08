@@ -281,7 +281,7 @@ try {
     }
     
     // Assign currentFile to final for further processing
-    // Gán currentFile vào final để xử lý tiếp
+    // Assign currentFile to final for further processing (translated from Vietnamese)
     $final = $currentFile;
     
     // Legacy processing for non-.xbk files (backward compatibility)

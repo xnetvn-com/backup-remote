@@ -51,7 +51,7 @@ class ArchiveHandler
         $this->logger->debug('Temporary directory for archives', ['tmpDir' => $tempDir]);
         // Get encryption password from environment (ENCRYPTION_PASSWORD or fallback to BACKUP_PASSWORD)
         $password = Helper::env('ENCRYPTION_PASSWORD', Helper::env('BACKUP_PASSWORD', $_ENV['BACKUP_PASSWORD'] ?? null));
-        $this->logger->debug('Encryption password source checked', ['passwordSet' => $password !== null]);
+        $this->logger->debug('Encryption password source checked', ['passwordConfigured' => $password !== null]);
         if (!$password) {
             $this->logger->error('ENCRYPTION_PASSWORD is not set. Encryption is required.');
             throw new \RuntimeException('ENCRYPTION_PASSWORD is not set.');
@@ -252,7 +252,12 @@ class ArchiveHandler
                 }
                 
                 // Cleanup temporary file
-                @unlink($tmpFile);
+                try {
+                    \App\Utils\Helper::assertInTmpDir($tmpFile);
+                    unlink($tmpFile);
+                } catch (\RuntimeException $e) {
+                    $this->logger->warning("Skipping cleanup of non-temp file: {$tmpFile}");
+                }
             }
             return $processedFiles;
         }

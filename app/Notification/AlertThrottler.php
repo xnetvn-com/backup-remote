@@ -58,7 +58,12 @@ class AlertThrottler
             
             // Atomic move - this operation is atomic on most filesystems
             if (!rename($tempFile, $this->stateFile)) {
-                @unlink($tempFile); // Cleanup on failure
+                try {
+                    \App\Utils\Helper::assertInTmpDir($tempFile);
+                    unlink($tempFile);
+                } catch (\RuntimeException $e) {
+                    // Suppress cleanup error
+                }
                 throw new \RuntimeException('Failed to update throttle state file atomically');
             }
             

@@ -41,7 +41,7 @@ class StorageFactory
     {
         // log storage creation attempt
         if ($logger) {
-            $logger->debug('StorageFactory.create called', ['type' => $type, 'configKeys' => array_keys($config)]);
+            $logger->debug('StorageFactory.create called', ['type' => $type]);
         }
         switch ($type) {
             case 's3':

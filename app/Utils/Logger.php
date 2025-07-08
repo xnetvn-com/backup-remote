@@ -48,24 +48,39 @@ class Logger
         return self::$instance;
     }
 
+    /**
+     * Redact sensitive values from context before logging
+     */
+    private static function sanitizeContext(array $context): array
+    {
+        foreach ($context as $key => &$value) {
+            if (is_array($value)) {
+                $value = self::sanitizeContext($value);
+            } elseif (preg_match('/(key|secret|pass(word)?|token|password)/i', $key)) {
+                $value = '[REDACTED]';
+            }
+        }
+        return $context;
+    }
+
     public static function info(string $message, array $context = []): void
     {
-        self::getLogger()->info($message, $context);
+        self::getLogger()->info($message, self::sanitizeContext($context));
     }
 
     public static function error(string $message, array $context = []): void
     {
-        self::getLogger()->error($message, $context);
+        self::getLogger()->error($message, self::sanitizeContext($context));
     }
 
     // add detailed log levels
     public static function debug(string $message, array $context = []): void
     {
-        self::getLogger()->debug($message, $context);
+        self::getLogger()->debug($message, self::sanitizeContext($context));
     }
 
     public static function warning(string $message, array $context = []): void
     {
-        self::getLogger()->warning($message, $context);
+        self::getLogger()->warning($message, self::sanitizeContext($context));
     }
 }

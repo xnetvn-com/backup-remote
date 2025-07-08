@@ -41,9 +41,11 @@ class BackupManager
         $this->notificationManager = $notificationManager;
         $this->localFinder = new LocalFinder($this->config, $this->logger);
         // add initialization log
+        $remoteDrivers = array_map(fn($r) => $r['driver'] ?? 'unknown', (array)($this->config['remotes'] ?? []));
         $this->logger->debug('BackupManager initialized', [
             'backup_dirs' => $this->config['backup_dirs'],
-            'remotes' => $this->config['remotes'],
+            'remotesCount' => count($remoteDrivers),
+            'remoteDrivers' => $remoteDrivers,
         ]);
     }
 
@@ -53,14 +55,27 @@ class BackupManager
      * @param bool $isDryRun If true, simulates the process without actual file operations.
      */
 
-    public function run(bool $isDryRun = false): void
+    public function run(bool $isDryRun = false, bool $isForce = false): void
     {
+        
+        if (!$isForce) {
+            $lastSuccessTime = $this->checkLastSuccessfulBackup();
+            if($lastSuccessTime) {
+                $this->logger->info(sprintf('Last successful backup at %s, within 24h, skipping execution.', $lastSuccessTime));
+                exit();
+            }
+        }
+        
+        $isAllUploadedSuccess = true;
+        
         // log start of backup run
         $this->logger->info('Backup process started', ['dry_run' => $isDryRun]);
         // log configuration values
+        $remoteDrivers = array_map(fn($r) => $r['driver'] ?? 'unknown', (array)($this->config['remotes'] ?? []));
         $this->logger->debug('Running backup with configuration', [
             'backup_dirs' => $this->config['backup_dirs'],
-            'remotes' => $this->config['remotes'],
+            'remotesCount' => count($remoteDrivers),
+            'remoteDrivers' => $remoteDrivers,
         ]);
 
         $compression = \App\Utils\Helper::env('BACKUP_COMPRESSION', 'none');
@@ -82,7 +97,7 @@ class BackupManager
         // Defensive check for remotes config
         if (empty($this->config['remotes']) || !is_array($this->config['remotes'])) {
             $message = 'Missing or invalid remotes configuration.';
-            $this->logger->error($message, ['config' => $this->config['remotes'] ?? null]);
+            $this->logger->error($message, ['remotesConfigured' => false]);
             $this->notificationManager->sendAlert('Backup failed: remotes misconfiguration', $message);
             return;
         }
@@ -91,14 +106,14 @@ class BackupManager
         $storages = [];
         foreach ($this->config['remotes'] as $remoteConfig) {
             if (empty($remoteConfig['driver'])) {
-                $this->logger->warning('Remote config missing driver, skipping.', ['remote' => $remoteConfig]);
+                $this->logger->warning('Remote config missing driver, skipping.', ['driver' => $remoteConfig['driver'] ?? null]);
                 continue;
             }
             $storage = StorageFactory::create($remoteConfig['driver'], $remoteConfig, $this->logger);
             if ($storage) {
                 $storages[] = ['driver' => $remoteConfig['driver'], 'storage' => $storage];
             } else {
-                $this->logger->error('Failed to create storage for remote.', ['remote' => $remoteConfig]);
+                $this->logger->error('Failed to create storage for remote.', ['driver' => $remoteConfig['driver']]);
             }
         }
         if (empty($storages)) {
@@ -109,68 +124,80 @@ class BackupManager
 
         $tmpDir = \App\Utils\Helper::getTmpDir();
 
-        foreach ($usersToBackup as $username => $userPath) {
-            $this->logger->info("--- Starting backup for user: {$username} ---");
+        $this->logger->info("Found usersToBackup : " . json_encode(($usersToBackup), JSON_PRETTY_PRINT));
 
-            // Pre-check: skip if remote already has this backup on all remotes
-            $expectedFilename = basename(\App\Utils\Helper::createXbkFilename($userPath, $compression, $encryption));
-            $this->logger->info("Checking if backup file already exists on remote storages: {$expectedFilename}");
-            
+        foreach ($usersToBackup as $username => $userPath) {
+
             $remoteFilesStatus = [];
-            $allExist = true;
+            
+            $allExist = false;
             $anyExists = false;
             
-            foreach ($storages as $storageInfo) {
-                $driver = $storageInfo['driver'];
-                $remotePath = ($this->config['remote']['path'] ?? '') . '/' . $expectedFilename;
+            if('__root__' !== $username) {
+
+                $allExist = true;
                 
-                try {
-                    $exists = $storageInfo['storage']->fileExists($remotePath);
-                    $remoteFilesStatus[$driver] = [
-                        'exists' => $exists,
-                        'path' => $remotePath,
-                        'size' => null
-                    ];
+
+                $this->logger->info("--- Starting backup for user: {$username} ---");
+
+                // Pre-check: skip if remote already has this backup on all remotes
+                $expectedFilename = basename(\App\Utils\Helper::createXbkFilename($userPath, $compression, $encryption));
+                $this->logger->info("Checking if backup file already exists on remote storages: {$userPath}/{$expectedFilename}");
+                
+                foreach ($storages as $storageInfo) {
+                    $driver = $storageInfo['driver'];
+                    $remotePath = ($this->config['remote']['path'] ?? '') . '/' . $expectedFilename;
                     
-                    if ($exists) {
-                        $anyExists = true;
-                        try {
-                            $remoteSize = $storageInfo['storage']->fileSize($remotePath);
-                            $remoteFilesStatus[$driver]['size'] = $remoteSize;
-                            $this->logger->info("Remote file exists on {$driver}: {$remotePath} (size: " . number_format($remoteSize) . " bytes)");
-                        } catch (\Throwable $e) {
-                            $this->logger->warning("Could not get file size for {$remotePath} on {$driver}: " . $e->getMessage());
-                            $remoteFilesStatus[$driver]['size'] = 'unknown';
+                    try {
+                        $exists = $storageInfo['storage']->fileExists($remotePath);
+                        $remoteFilesStatus[$driver] = [
+                            'exists' => $exists,
+                            'path' => $remotePath,
+                            'size' => null
+                        ];
+                        
+                        if ($exists) {
+                            $anyExists = true;
+                            try {
+                                $remoteSize = $storageInfo['storage']->fileSize($remotePath);
+                                $remoteFilesStatus[$driver]['size'] = $remoteSize;
+                                $this->logger->info("Remote file exists on {$driver}: {$remotePath} (size: " . number_format($remoteSize) . " bytes)");
+                            } catch (\Throwable $e) {
+                                $this->logger->warning("Could not get file size for {$remotePath} on {$driver}: " . $e->getMessage());
+                                $remoteFilesStatus[$driver]['size'] = 'unknown';
+                            }
+                        } else {
+                            $allExist = false;
+                            $this->logger->info("Remote file does not exist on {$driver}: {$remotePath}");
                         }
-                    } else {
+                    } catch (\Throwable $e) {
                         $allExist = false;
-                        $this->logger->info("Remote file does not exist on {$driver}: {$remotePath}");
+                        $this->logger->warning("Could not check file existence on {$driver}: " . $e->getMessage());
+                        $remoteFilesStatus[$driver] = [
+                            'exists' => false,
+                            'path' => $remotePath,
+                            'size' => null,
+                            'error' => $e->getMessage()
+                        ];
                     }
-                } catch (\Throwable $e) {
-                    $allExist = false;
-                    $this->logger->warning("Could not check file existence on {$driver}: " . $e->getMessage());
-                    $remoteFilesStatus[$driver] = [
-                        'exists' => false,
-                        'path' => $remotePath,
-                        'size' => null,
-                        'error' => $e->getMessage()
-                    ];
                 }
+                
+                // Log summary of remote file status
+                $existingCount = array_sum(array_map(fn($status) => $status['exists'] ? 1 : 0, $remoteFilesStatus));
+                $totalRemotes = count($storages);
+                $this->logger->info("Remote file status summary for {$username}: {$existingCount}/{$totalRemotes} remotes have the backup file");
+                
+                if ($allExist) {
+                    $this->logger->info("Skipping backup for user {$username}: backup file exists on all remote storages ({$expectedFilename})");
+                    continue;
+                } elseif ($anyExists) {
+                    $this->logger->info("Partial backup exists for user {$username}: will process and upload to missing remotes only");
+                } else {
+                    $this->logger->info("No existing backup found for user {$username}: will create new backup and upload to all remotes");
+                }
+
             }
             
-            // Log summary of remote file status
-            $existingCount = array_sum(array_map(fn($status) => $status['exists'] ? 1 : 0, $remoteFilesStatus));
-            $totalRemotes = count($storages);
-            $this->logger->info("Remote file status summary for {$username}: {$existingCount}/{$totalRemotes} remotes have the backup file");
-            
-            if ($allExist) {
-                $this->logger->info("Skipping backup for user {$username}: backup file exists on all remote storages ({$expectedFilename})");
-                continue;
-            } elseif ($anyExists) {
-                $this->logger->info("Partial backup exists for user {$username}: will process and upload to missing remotes only");
-            } else {
-                $this->logger->info("No existing backup found for user {$username}: will create new backup and upload to all remotes");
-            }
 
             try {
                 $archivePath = $archiveHandler->create($username, $userPath, $isDryRun, $storages);
@@ -208,6 +235,7 @@ class BackupManager
                                     $this->logger->info("Successfully uploaded {$filename} to {$driver}");
                                 } catch (\Throwable $e) {
                                     $allUploadsOk = false;
+                                    $isAllUploadedSuccess = false;
                                     $this->logger->error("Upload failed for file {$filename} to remote {$driver}: " . $e->getMessage());
                                 }
                             }
@@ -220,22 +248,72 @@ class BackupManager
                         } elseif (!$this->isInTmpDir($filePath, $tmpDir)) {
                             $this->logger->info("File {$filePath} is not in TMP_DIR, skipping deletion.");
                         }
+
+                        if(!$allUploadsOk) {
+                            $this->logger->error("Not all uploads were successful for user {$username}. Some files may not have been uploaded.");
+                            $isAllUploadedSuccess = false;
+                        } else {
+                            $this->logger->info("All uploads completed successfully for user {$username}.");
+                        }
+
                     }
                 }
             } catch (Throwable $e) {
+                $isAllUploadedSuccess = false;
                 $this->logger->error("Failed to backup user {$username}: " . $e->getMessage(), ['exception' => $e]);
                 $this->notificationManager->sendAlert("Backup failed for user: {$username}", $e->getMessage());
             }
+
             $this->logger->info("--- Finished backup for user: {$username} ---");
         }
-
+        
         // Perform rotation for each remote
         foreach ($storages as $storageInfo) {
             $this->performRotation($storageInfo['storage'], $isDryRun, $storageInfo['driver']);
         }
 
-        // Cleanup the entire TMP_DIR after completing the backup for all users
-        $this->cleanupTmpDir($tmpDir, $isDryRun);
+        if($isAllUploadedSuccess) {
+
+            $this->logger->info("All backups completed successfully.");
+            
+            // Cleanup the entire TMP_DIR after completing the backup for all users
+            $this->cleanupTmpDir($tmpDir, $isDryRun);
+
+            // Record last successful backup timestamp
+            $this->writeLastSuccessfulBackup();
+            
+        } else {
+            $this->logger->warning("Some backups had issues. Please check the logs for details.");
+        }
+        
+    }
+
+    /**
+     * Check if the last successful backup was within 24 hours.
+     * @param string $statusFile
+     * @return bool True if should proceed, False if should skip
+     */
+    private function checkLastSuccessfulBackup(string $statusFile = '')
+    {
+        if(!$statusFile) {
+            $statusFile = $this->getStatusFile();
+        }
+        
+        $lastSuccess = $this->readLastSuccessfulBackup($statusFile);
+        if ($lastSuccess && (time() - $lastSuccess->getTimestamp()) < 86000) {
+            return trim($lastSuccess->format(\DateTime::ATOM)); // Return the last successful backup time in ISO format
+        }
+        return false;
+    }
+
+    /**
+     * Get the path to the last successful backup status file.
+     * @return string
+     */
+    private function getStatusFile(): string
+    {
+        $tmpDir = \App\Utils\Helper::getTmpDir();
+        return $this->config['local']['status_file'] ?? $tmpDir . '/last_successful_backup.json';
     }
 
     /**
@@ -323,13 +401,11 @@ class BackupManager
     {
         // Protect source directories: only delete files in temp directory
         $tmpDir = $this->config['local']['temp_dir'] ?? \App\Utils\Helper::getTmpDir();
-        $realTmp = realpath($tmpDir) ?: $tmpDir;
-        $realArchive = realpath($archivePath) ?: $archivePath;
-        if (!str_starts_with($realArchive, $realTmp)) {
+        if (!\App\Utils\Helper::isPathInTmpDir($archivePath)) {
             $this->logger->warning("Skipping deletion of non-temp file: {$archivePath}");
             return;
         }
-        
+
         $this->logger->info("Cleaning up local archive: {$archivePath}");
         if ($isDryRun) {
             $this->logger->info('[DRY-RUN] Skipping local file deletion.');
@@ -375,13 +451,15 @@ class BackupManager
             return;
         }
         $lockFile = $tmpDir . '/.backup.lock';
+        $statusFile = $this->getStatusFile();
+
         $files = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($tmpDir, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
-        foreach ($files as $file) {
+         foreach ($files as $file) {
             $path = $file->getRealPath();
-            if ($path === false || $path === $lockFile) {
+            if ($path === false || (false !== stripos($path, $lockFile)) || (false !== stripos($path, $statusFile)) || !\App\Utils\Helper::isPathInTmpDir($path)) {
                 continue;
             }
             if ($file->isFile()) {
@@ -389,6 +467,48 @@ class BackupManager
             } elseif ($file->isDir()) {
                 @rmdir($path);
             }
+         }
+     }
+
+    // private helper to read last backup timestamp
+    private function readLastSuccessfulBackup(string $statusFile = ''): ?\DateTimeImmutable
+    {
+
+        if(!$statusFile) {
+            $statusFile = $this->getStatusFile();
+        }
+
+        if (!is_file($statusFile)) {
+            return null;
+        }
+        try {
+            $data = json_decode((string) file_get_contents($statusFile), true);
+            if (!empty($data['last_success'])) {
+                return new \DateTimeImmutable($data['last_success']);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning("Unable to read backup status from '{$statusFile}': " . $e->getMessage());
+        }
+        return null;
+    }
+
+    // private helper to write last backup timestamp
+    private function writeLastSuccessfulBackup(string $statusFile = ''): void
+    {
+        if(!$statusFile) {
+            $statusFile = $this->getStatusFile();
+        }
+
+        $data = ['last_success' => (new \DateTimeImmutable())->format(\DateTime::ATOM)];
+        try {
+            $dir = dirname($statusFile);
+            if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                throw new \RuntimeException("Failed to create directory '{$dir}'");
+            }
+            file_put_contents($statusFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+            $this->logger->info("Backup status written to '{$statusFile}'");
+        } catch (\Throwable $e) {
+            $this->logger->error("Failed to write backup status to '{$statusFile}': " . $e->getMessage());
         }
     }
 }

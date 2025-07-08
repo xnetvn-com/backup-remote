@@ -27,7 +27,7 @@ class SystemChecker
         $this->config = $config;
         $this->logger = $logger;
         // log initialization of SystemChecker
-        $this->logger->debug('SystemChecker initialized', ['config' => $this->config]);
+        $this->logger->debug('SystemChecker initialized', ['performanceConfigKeys' => array_keys($this->config['performance'] ?? [])]);
     }
 
     public function runChecks(): void

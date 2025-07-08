@@ -97,7 +97,7 @@ try {
     // 3. Execute Backup
     $logger->info("Starting backup process...");
     $backupManager = new BackupManager($config, $logger, $notificationManager);
-    $backupManager->run($isDryRun);
+    $backupManager->run($isDryRun, $isForce);
 
     $logger->info("Backup process completed successfully.");
     if (!$isDryRun) {

@@ -31,8 +31,17 @@ class NotificationManager
     {
         $this->config = $config;
         $this->logger = $logger;
-        // log NotificationManager initialization
-        $this->logger->debug('NotificationManager initialized', ['channelsConfigured' => $config['notification']['channels'] ?? []]);
+        // log NotificationManager initialization with channel names only
+        $configuredChannels = $this->config['notification']['channels'] ?? [];
+        $activeChannels = [];
+        if (is_array($configuredChannels)) {
+            foreach ($configuredChannels as $name => $channelConfig) {
+                if (!empty($channelConfig['enabled'])) {
+                    $activeChannels[] = $name;
+                }
+            }
+        }
+        $this->logger->debug('NotificationManager initialized', ['channelsCount' => count($activeChannels), 'channels' => $activeChannels]);
         $throttleConfig = $config['notification']['throttle'] ?? [];
         $this->throttler = new AlertThrottler($throttleConfig);
         $this->registerChannels();

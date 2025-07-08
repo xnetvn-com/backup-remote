@@ -694,6 +694,34 @@ class Helper
     }
 
     /**
+     * Check if given path is inside TMP_DIR.
+     * @param string $path Path to check
+     * @return bool True if under TMP_DIR
+     */
+    public static function isPathInTmpDir(string $path): bool
+    {
+        $tmpDir = self::getTmpDir();
+        $realTmp = realpath($tmpDir) ?: $tmpDir;
+        $realPath = realpath($path) ?: $path;
+        return str_starts_with($realPath, $realTmp);
+    }
+
+    /**
+     * Ensure the given path is within the configured temporary directory.
+     *
+     * @param string $path
+     * @throws \RuntimeException if the path is outside TMP_DIR
+     */
+    public static function assertInTmpDir(string $path): void
+    {
+        $tmpRoot = realpath(self::getTmpDir()) ?: self::getTmpDir();
+        $realPath = realpath($path) ?: $path;
+        if (!str_starts_with($realPath, $tmpRoot)) {
+            throw new \RuntimeException("Operation not allowed outside the temporary directory: {$path}");
+        }
+    }
+
+    /**
      * Normalize compression level for supported methods.
      * @param string $method Compression method (gzip, zstd, bzip2, xz, none)
      * @param int|string|null $level Input level (from env or user)
@@ -1309,7 +1337,12 @@ class Helper
      */
     private static function removeDirectory(string $dir): void
     {
-        if (!is_dir($dir)) return;
+        // Ensure directory is within TMP_DIR
+        self::assertInTmpDir($dir);
+
+         if (!is_dir($dir)) {
+             return;
+         }
         
         $files = array_diff(scandir($dir), ['.', '..']);
         foreach ($files as $file) {
