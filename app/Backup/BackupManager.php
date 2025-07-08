@@ -40,6 +40,11 @@ class BackupManager
         $this->logger = $logger;
         $this->notificationManager = $notificationManager;
         $this->localFinder = new LocalFinder($this->config, $this->logger);
+        // add initialization log
+        $this->logger->debug('BackupManager initialized', [
+            'backup_dirs' => $this->config['backup_dirs'],
+            'remotes' => $this->config['remotes'],
+        ]);
     }
 
     /**
@@ -50,6 +55,22 @@ class BackupManager
 
     public function run(bool $isDryRun = false): void
     {
+        // log start of backup run
+        $this->logger->info('Backup process started', ['dry_run' => $isDryRun]);
+        // log configuration values
+        $this->logger->debug('Running backup with configuration', [
+            'backup_dirs' => $this->config['backup_dirs'],
+            'remotes' => $this->config['remotes'],
+        ]);
+
+        $compression = \App\Utils\Helper::env('BACKUP_COMPRESSION', 'none');
+        $encryption  = \App\Utils\Helper::env('BACKUP_ENCRYPTION', 'none');
+        // log chosen compression and encryption
+        $this->logger->debug('Backup methods selected', [
+            'compression' => $compression,
+            'encryption' => $encryption,
+        ]);
+
         $usersToBackup = $this->localFinder->findBackupUsers();
         if (empty($usersToBackup)) {
             $this->logger->info('No users found to backup in configured backup directories.');
@@ -87,10 +108,6 @@ class BackupManager
         }
 
         $tmpDir = \App\Utils\Helper::getTmpDir();
-
-        // Determine compression/encryption methods
-        $compression = \App\Utils\Helper::env('BACKUP_COMPRESSION', 'none');
-        $encryption  = \App\Utils\Helper::env('BACKUP_ENCRYPTION', 'none');
 
         foreach ($usersToBackup as $username => $userPath) {
             $this->logger->info("--- Starting backup for user: {$username} ---");

@@ -40,19 +40,34 @@ class ArchiveHandler
      */
     public function create(string $username, string $userPath, bool $isDryRun, ?array $remoteStorages = null): string|array|null
     {
+        // log entry into archive creation
+        $this->logger->info('ArchiveHandler.create called', [
+            'username' => $username,
+            'userPath' => $userPath,
+            'dryRun' => $isDryRun,
+            'remoteStoragesCount' => is_array($remoteStorages) ? count($remoteStorages) : 0,
+        ]);
         $tempDir = Helper::getTmpDir();
+        $this->logger->debug('Temporary directory for archives', ['tmpDir' => $tempDir]);
         // Get encryption password from environment (ENCRYPTION_PASSWORD or fallback to BACKUP_PASSWORD)
         $password = Helper::env('ENCRYPTION_PASSWORD', Helper::env('BACKUP_PASSWORD', $_ENV['BACKUP_PASSWORD'] ?? null));
+        $this->logger->debug('Encryption password source checked', ['passwordSet' => $password !== null]);
         if (!$password) {
             $this->logger->error('ENCRYPTION_PASSWORD is not set. Encryption is required.');
             throw new \RuntimeException('ENCRYPTION_PASSWORD is not set.');
         }
+        $this->logger->info('Password configured for encryption');
         $compression = strtolower(Helper::env('BACKUP_COMPRESSION', 'gzip'));
         $encryption = strtolower(Helper::env('BACKUP_ENCRYPTION', 'aes'));
         $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
-        $this->logger->info("Compression method: {$compression}, Encryption method: {$encryption}, Level: " . (is_null($compressionLevel) ? 'none' : $compressionLevel));
+        $this->logger->info('Compression and encryption settings', [
+            'compression' => $compression,
+            'encryption' => $encryption,
+            'compressionLevel' => $compressionLevel ?? 'none',
+        ]);
 
         // Check AES-256 support for all encryption methods
+        $this->logger->debug('Verifying AES support for chosen methods');
         if ($encryption === 'aes' || $encryption === 'openssl') {
             Helper::assertAesSupport('aes');
         } elseif ($encryption === 'gpg' || $encryption === 'gpg2' || $encryption === 'gnupg') {
@@ -60,144 +75,148 @@ class ArchiveHandler
         } elseif (in_array($compression, ['zip', '7z', '7zip']) && $encryption === 'aes') {
             Helper::assertAesSupport($compression);
         }
+        $this->logger->debug('ArchiveHandler.create post-AES check', ['compression' => $compression, 'encryption' => $encryption]);
 
         // If backing up files directly in the root directory, process each file
         if ($username === '__root__') {
-            $backupFiles = glob(rtrim($userPath, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
-            if (!$backupFiles || count($backupFiles) === 0) {
-                $this->logger->warning("No backup files found in root directory: {$userPath}");
-                return null;
-            }
-            // Sort and limit to latest backups
-            usort($backupFiles, fn($a, $b) => filemtime($b) <=> filemtime($a));
-            $keepN = (int) ($this->config['rotation']['policies']['keep_latest'] ?? Helper::env('ROTATION_KEEP_LATEST', 7));
-            $this->logger->info("Limiting to latest {$keepN} files in root backup: found " . count($backupFiles));
-            $backupFiles = array_slice($backupFiles, 0, $keepN);
-            $processedFiles = [];
-            foreach ($backupFiles as $file) {
-                $fileSize = filesize($file) ?: 0;
-                $this->logger->info("Processing file: {$file} (size: " . number_format($fileSize) . " bytes)");
-                $tmpFile = rtrim($tempDir, '/') . '/' . basename($file);
+            $this->logger->info('Processing root backups', ['userPath' => $userPath]);
+             $backupFiles = glob(rtrim($userPath, '/') . '/*.{tar,zip,gz,zst}', GLOB_BRACE);
+            $this->logger->debug('Found backup files in root', ['filesCount' => $backupFiles ? count($backupFiles) : 0]);
+             if (!$backupFiles || count($backupFiles) === 0) {
+                 $this->logger->warning("No backup files found in root directory: {$userPath}");
+                 return null;
+             }
+            $this->logger->info('Limiting backups after sort', ['keepLatest' => $keepN = (int) ($this->config['rotation']['policies']['keep_latest'] ?? Helper::env('ROTATION_KEEP_LATEST', 7))]);
+             // Sort and limit to latest backups
+             usort($backupFiles, fn($a, $b) => filemtime($b) <=> filemtime($a));
+             $keepN = (int) ($this->config['rotation']['policies']['keep_latest'] ?? Helper::env('ROTATION_KEEP_LATEST', 7));
+            $this->logger->debug('BackupFiles sorted and sliced', ['totalFound' => count($backupFiles), 'sliceSize' => $keepN]);
+             $backupFiles = array_slice($backupFiles, 0, $keepN);
+             $processedFiles = [];
+             foreach ($backupFiles as $file) {
+                 $fileSize = filesize($file) ?: 0;
+                 $this->logger->info("Processing file: {$file} (size: " . number_format($fileSize) . " bytes)");
+                 $tmpFile = rtrim($tempDir, '/') . '/' . basename($file);
 
-                // Create expected final filename
-                $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
-                $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
+                 // Create expected final filename
+                 $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
+                 $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
                 
-                // Check if final output already exists locally
-                if (file_exists($finalPath) && (filesize($finalPath) > ceil($fileSize * 0.5))) {
-                    $this->logger->info("Skipping compress/encrypt for {$file}: output already exists locally: {$finalPath}");
-                    $processedFiles[] = $finalPath;
-                    continue;
-                }
+                 // Check if final output already exists locally
+                 if (file_exists($finalPath) && (filesize($finalPath) > ceil($fileSize * 0.5))) {
+                     $this->logger->info("Skipping compress/encrypt for {$file}: output already exists locally: {$finalPath}");
+                     $processedFiles[] = $finalPath;
+                     continue;
+                 }
                 
-                // Check remote existence with size threshold: only skip if remote file size >= 50% of original
-                $threshold = (int) ceil($fileSize * 0.5);
-                if ($remoteStorages && $this->checkRemoteFileExists($finalFilename, $remoteStorages, $threshold)) {
-                    $this->logger->info("Skipping processing for {$file}: final backup already exists on remote storage(s)");
+                 // Check remote existence with size threshold: only skip if remote file size >= 50% of original
+                 $threshold = (int) ceil($fileSize * 0.5);
+                 if ($remoteStorages && $this->checkRemoteFileExists($finalFilename, $remoteStorages, $threshold)) {
+                     $this->logger->info("Skipping processing for {$file}: final backup already exists on remote storage(s)");
                     
                     // Skip adding to processedFiles since file already exists on remote - no need to upload
                     continue;
-                }
+                 }
 
-                // Copy the original file to tmp (preserve source files)
-                $tmpDir = \App\Utils\Helper::getTmpDir();
-                $realTmpDir = realpath($tmpDir) ?: $tmpDir;
-                $realFile = realpath($file);
-                if (!$realFile || !str_starts_with($realFile, realpath(dirname($file)))) {
-                    $this->logger->error("Invalid or unsafe file path: {$file}");
-                    continue;
-                }
-                $tmpFile = rtrim($realTmpDir, '/') . '/' . basename($file);
+                 // Copy the original file to tmp (preserve source files)
+                 $tmpDir = \App\Utils\Helper::getTmpDir();
+                 $realTmpDir = realpath($tmpDir) ?: $tmpDir;
+                 $realFile = realpath($file);
+                 if (!$realFile || !str_starts_with($realFile, realpath(dirname($file)))) {
+                     $this->logger->error("Invalid or unsafe file path: {$file}");
+                     continue;
+                 }
+                 $tmpFile = rtrim($realTmpDir, '/') . '/' . basename($file);
                 
-                // Actually copy the file to tmp directory
-                if (!@copy($realFile, $tmpFile)) {
-                    $this->logger->error("Failed to copy {$realFile} to {$tmpFile}");
-                    continue;
-                }
+                 // Actually copy the file to tmp directory
+                 if (!@copy($realFile, $tmpFile)) {
+                     $this->logger->error("Failed to copy {$realFile} to {$tmpFile}");
+                     continue;
+                 }
 
-                // Create .xbk filename based on compression and encryption
-                $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
-                $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
+                 // Create .xbk filename based on compression and encryption
+                 $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
+                 $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
 
-                if ($isDryRun) {
-                    $this->logger->info("[DRY-RUN] Would process {$tmpFile} to {$finalPath} (compression: {$compression}, encryption: {$encryption})");
-                    $processedFiles[] = $finalPath;
-                    continue;
-                }
+                 if ($isDryRun) {
+                     $this->logger->info("[DRY-RUN] Would process {$tmpFile} to {$finalPath} (compression: {$compression}, encryption: {$encryption})");
+                     $processedFiles[] = $finalPath;
+                     continue;
+                 }
 
-                // Create final filename based on compression and encryption combination
-                $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
-                $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
+                 // Create final filename based on compression and encryption combination
+                 $finalFilename = Helper::createXbkFilename($tmpFile, $compression, $encryption);
+                 $finalPath = rtrim($tempDir, '/') . '/' . basename($finalFilename);
 
-                // Special handling for combined compression+encryption methods
-                $this->logger->debug("Checking combined methods: compression='{$compression}', encryption='{$encryption}'");
-                if (($compression === '7z' || $compression === '7zip') && ($encryption === '7z' || $encryption === '7zip')) {
-                    // 7z can compress and encrypt in one step
-                    $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
-                    $ok = Helper::sevenZipCompressEncryptFile($tmpFile, $finalPath, $password, $compressionLevel ?? 5);
-                    if ($ok) {
-                        $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using 7z");
-                        $processedFiles[] = $finalPath;
-                    } else {
-                        $this->logger->error("Failed to compress and encrypt {$tmpFile} with 7z");
-                    }
-                    // Cleanup temporary file
-                    @unlink($tmpFile);
-                } elseif ($compression === 'zip' && $encryption === 'zip') {
-                    // zip can compress and encrypt in one step
-                    $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
-                    $ok = Helper::zipCompressEncryptFile($tmpFile, $finalPath, $password, $compressionLevel ?? 6);
-                    if ($ok) {
-                        $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using zip");
-                        $processedFiles[] = $finalPath;
-                    } else {
-                        $this->logger->error("Failed to compress and encrypt {$tmpFile} with zip");
-                    }
-                    // Cleanup temporary file
-                    @unlink($tmpFile);
-                } else {
-                    // Separate compression and encryption steps
+                 // Special handling for combined compression+encryption methods
+                 $this->logger->debug("Checking combined methods: compression='{$compression}', encryption='{$encryption}'");
+                 if (($compression === '7z' || $compression === '7zip') && ($encryption === '7z' || $encryption === '7zip')) {
+                     // 7z can compress and encrypt in one step
+                     $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
+                     $ok = Helper::sevenZipCompressEncryptFile($tmpFile, $finalPath, $password, $compressionLevel ?? 5);
+                     if ($ok) {
+                         $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using 7z");
+                         $processedFiles[] = $finalPath;
+                     } else {
+                         $this->logger->error("Failed to compress and encrypt {$tmpFile} with 7z");
+                     }
+                     // Cleanup temporary file
+                     @unlink($tmpFile);
+                 } elseif ($compression === 'zip' && $encryption === 'zip') {
+                     // zip can compress and encrypt in one step
+                     $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
+                     $ok = Helper::zipCompressEncryptFile($tmpFile, $finalPath, $password, $compressionLevel ?? 6);
+                     if ($ok) {
+                         $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using zip");
+                         $processedFiles[] = $finalPath;
+                     } else {
+                         $this->logger->error("Failed to compress and encrypt {$tmpFile} with zip");
+                     }
+                     // Cleanup temporary file
+                     @unlink($tmpFile);
+                 } else {
+                     // Separate compression and encryption steps
 
-                    // Step 1: Apply compression first (if enabled)
-                    $compressedFile = $tmpFile;
-                    if ($compression !== 'none') {
-                        $compExt = match ($compression) {
-                            'gzip', 'gz' => 'gz',
-                            'bzip2', 'bz2' => 'bz2',
-                            'xz' => 'xz',
-                            'zstd', 'zst' => 'zst',
-                            'zip' => 'zip',
-                            '7z', '7zip' => '7z',
-                            default => 'gz',
-                        };
-                        $compressedFile = $tmpFile . '.xbk.' . $compExt;
-                        $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
+                     // Step 1: Apply compression first (if enabled)
+                     $compressedFile = $tmpFile;
+                     if ($compression !== 'none') {
+                         $compExt = match ($compression) {
+                             'gzip', 'gz' => 'gz',
+                             'bzip2', 'bz2' => 'bz2',
+                             'xz' => 'xz',
+                             'zstd', 'zst' => 'zst',
+                             'zip' => 'zip',
+                             '7z', '7zip' => '7z',
+                             default => 'gz',
+                         };
+                         $compressedFile = $tmpFile . '.xbk.' . $compExt;
+                         $compressionLevel = Helper::normalizeCompressionLevel($compression, Helper::env('BACKUP_COMPRESSION_LEVEL', 1));
 
-                        $ok = match ($compression) {
-                            'gzip', 'gz' => Helper::gzipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
-                            'bzip2', 'bz2' => Helper::bzip2CompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
-                            'xz' => Helper::xzCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
-                            'zstd', 'zst' => Helper::zstdCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 19),
-                            'zip' => Helper::zipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
-                            '7z', '7zip' => Helper::sevenZipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 5),
-                            default => Helper::gzipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
-                        };
+                         $ok = match ($compression) {
+                             'gzip', 'gz' => Helper::gzipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
+                             'bzip2', 'bz2' => Helper::bzip2CompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
+                             'xz' => Helper::xzCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
+                             'zstd', 'zst' => Helper::zstdCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 19),
+                             'zip' => Helper::zipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
+                             '7z', '7zip' => Helper::sevenZipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 5),
+                             default => Helper::gzipCompressFile($tmpFile, $compressedFile, $compressionLevel ?? 6),
+                         };
 
-                        if (!$ok) {
-                            $this->logger->error("Failed to compress {$tmpFile} with {$compression}");
-                            @unlink($tmpFile);
-                            continue;
-                        }
-                        $this->logger->info("Compressed {$tmpFile} to {$compressedFile} using {$compression}");
-                    } else {
-                        // No compression, add .xbk marker
-                        $compressedFile = $tmpFile . '.xbk';
-                        if (!@copy($tmpFile, $compressedFile)) {
-                            $this->logger->error("Failed to create .xbk marker file: {$compressedFile}");
-                            @unlink($tmpFile);
-                            continue;
-                        }
-                    }
+                         if (!$ok) {
+                             $this->logger->error("Failed to compress {$tmpFile} with {$compression}");
+                             @unlink($tmpFile);
+                             continue;
+                         }
+                         $this->logger->info("Compressed {$tmpFile} to {$compressedFile} using {$compression}");
+                     } else {
+                         // No compression, add .xbk marker
+                         $compressedFile = $tmpFile . '.xbk';
+                         if (!@copy($tmpFile, $compressedFile)) {
+                             $this->logger->error("Failed to create .xbk marker file: {$compressedFile}");
+                             @unlink($tmpFile);
+                             continue;
+                         }
+                     }
 
                     // Step 2: Apply encryption (if enabled)
                     $encryptedFile = $compressedFile;

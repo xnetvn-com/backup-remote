@@ -26,10 +26,17 @@ class SystemChecker
     {
         $this->config = $config;
         $this->logger = $logger;
+        // log initialization of SystemChecker
+        $this->logger->debug('SystemChecker initialized', ['config' => $this->config]);
     }
 
     public function runChecks(): void
     {
+        // log entry into runChecks
+        $this->logger->debug('SystemChecker.runChecks called', [
+            'performanceConfig' => $this->config['performance'] ?? [],
+            'localConfig' => $this->config['local'] ?? [],
+        ]);
         $this->logger->info('Running system checks...');
 
         if (

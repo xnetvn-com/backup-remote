@@ -33,6 +33,12 @@ class RotationManager
         $this->config = $config;
         $this->logger = $logger;
         $this->storage = $storage;
+        // log initialization of RotationManager
+        $this->logger->debug('RotationManager initialized', [
+            'keep_latest' => $this->config['rotation']['keep_latest'] ?? null,
+            'remote_path' => $this->config['remote']['path'] ?? null,
+            'storageClass' => get_class($storage),
+        ]);
     }
 
     /**
@@ -48,7 +54,12 @@ class RotationManager
         $remotePath = $this->config['remote']['path'] ?? '';
 
         $this->logger->info("Starting backup rotation process" . ($isDryRun ? " [DRY-RUN MODE]" : ""));
-        $this->logger->info("Fetching file list from remote path: '{$remotePath}'");
+        // detailed config logging
+        $this->logger->debug('RotationManager.run parameters', [
+            'keepCount' => $keepCount,
+            'remotePath' => $remotePath,
+            'dryRun' => $isDryRun,
+        ]);
         
         $startTime = microtime(true);
         

@@ -31,6 +31,8 @@ class NotificationManager
     {
         $this->config = $config;
         $this->logger = $logger;
+        // log NotificationManager initialization
+        $this->logger->debug('NotificationManager initialized', ['channelsConfigured' => $config['notification']['channels'] ?? []]);
         $throttleConfig = $config['notification']['throttle'] ?? [];
         $this->throttler = new AlertThrottler($throttleConfig);
         $this->registerChannels();
@@ -113,6 +115,7 @@ class NotificationManager
      */
     private function send(string $level, string $subject, string $message, ?string $details = null): void
     {
+        $this->logger->debug('Notification send called', ['level' => $level, 'subject' => $subject, 'details' => $details]);
         // Only allow valid PSR-3 levels for logger
         $validLevels = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
         $logLevel = in_array($level, $validLevels, true) ? $level : 'info';

@@ -45,6 +45,8 @@ class LocalFinder
     public function findBackupUsers(): array
     {
         $dirs = $this->config['backup_dirs'] ?? ['/backup'];
+        // log start of finding backup users
+        $this->logger->debug('Finding backup users in directories', ['backup_dirs' => $dirs]);
         $users = [];
         foreach ($dirs as $baseDir) {
             $this->logger->info("Searching for users in backup dir: {$baseDir}");
@@ -76,6 +78,8 @@ class LocalFinder
                 }
             }
         }
+        // log result of finding users
+        $this->logger->debug('Found backup users', ['user_count' => count($users), 'users' => array_keys($users)]);
         return $users;
     }
 

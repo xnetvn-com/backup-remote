@@ -22,6 +22,9 @@ use Monolog\Logger as MonoLogger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use Psr\Log\LoggerInterface;
+use Monolog\Processor\UidProcessor;
+use Monolog\Processor\IntrospectionProcessor;
+use Monolog\Processor\MemoryUsageProcessor;
 
 class Logger
 {
@@ -36,6 +39,10 @@ class Logger
             $stream->setFormatter($formatter);
             $logger = new MonoLogger('app');
             $logger->pushHandler($stream);
+            // add processors for more detailed logging context
+            $logger->pushProcessor(new UidProcessor());
+            $logger->pushProcessor(new IntrospectionProcessor());
+            $logger->pushProcessor(new MemoryUsageProcessor(true, true));
             self::$instance = $logger;
         }
         return self::$instance;
@@ -49,5 +56,16 @@ class Logger
     public static function error(string $message, array $context = []): void
     {
         self::getLogger()->error($message, $context);
+    }
+
+    // add detailed log levels
+    public static function debug(string $message, array $context = []): void
+    {
+        self::getLogger()->debug($message, $context);
+    }
+
+    public static function warning(string $message, array $context = []): void
+    {
+        self::getLogger()->warning($message, $context);
     }
 }

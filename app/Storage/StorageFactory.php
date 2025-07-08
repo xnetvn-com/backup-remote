@@ -39,8 +39,13 @@ class StorageFactory
 
     public static function create(string $type, array $config, ?LoggerInterface $logger = null): ?Filesystem
     {
+        // log storage creation attempt
+        if ($logger) {
+            $logger->debug('StorageFactory.create called', ['type' => $type, 'configKeys' => array_keys($config)]);
+        }
         switch ($type) {
             case 's3':
+                $logger?->debug('Configuring S3 storage', ['bucket' => $config['bucket'], 'region' => $config['region'] ?? null]);
                 $client = new S3Client([
                     'credentials' => [
                         'key' => $config['key'],
@@ -53,6 +58,7 @@ class StorageFactory
                 $adapter = new AwsS3V3Adapter($client, $config['bucket']);
                 return new Filesystem($adapter);
             case 'ftp':
+                $logger?->debug('Configuring FTP storage', ['host' => $config['host'], 'root' => $config['path'] ?? '/']);
                 $passive = $config['passive'] ?? true;
                 if (is_string($passive)) {
                     $passive = !in_array(strtolower($passive), ['false', '0', 'off'], true);
@@ -70,10 +76,12 @@ class StorageFactory
                 ]));
                 return new Filesystem($adapter);
             case 'local':
+                $logger?->debug('Configuring Local storage', ['root' => $config['root'] ?? '/']);
                 $adapter = new LocalFilesystemAdapter($config['root'] ?? '/');
                 return new Filesystem($adapter);
             // B2 can use the S3 adapter with a custom endpoint
             case 'b2':
+                $logger?->debug('Configuring B2 storage', ['bucket' => $config['bucket'], 'endpoint' => $config['endpoint'] ?? null]);
                 $client = new S3Client([
                     'credentials' => [
                         'key' => $config['key'],
@@ -85,6 +93,9 @@ class StorageFactory
                 ]);
                 $adapter = new AwsS3V3Adapter($client, $config['bucket']);
                 return new Filesystem($adapter);
+        }
+        if ($logger) {
+            $logger->info("StorageFactory.create result: " . ($type) );
         }
         return null;
     }
