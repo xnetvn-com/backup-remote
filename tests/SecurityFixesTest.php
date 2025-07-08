@@ -1,8 +1,13 @@
 <?php
 
 /**
+ * Copyright (c) 2025 xNetVN Inc.
+ * Website: https://xnetvn.com/
+ * License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+ * Contact: license@xnetvn.net
+ *
  * Security Test Suite
- * Tests for security fixes implemented in GIAI ĐOẠN 2
+ * Tests for security fixes implemented in Phase 2
  */
 
 declare(strict_types=1);

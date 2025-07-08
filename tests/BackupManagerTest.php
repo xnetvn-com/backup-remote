@@ -71,9 +71,15 @@ class BackupManagerTest extends TestCase
      */
     public function test_should_log_and_alert_when_missing_remote_driver(): void
     {
+        // Create a temporary directory with backup files to simulate users
+        $tempDir = sys_get_temp_dir() . '/test_backup_' . uniqid();
+        mkdir($tempDir, 0755, true);
+        // Create backup files to trigger __root__ user logic
+        file_put_contents($tempDir . '/backup.tar.gz', 'dummy backup content');
+        
         $config = [
-            'backup_dirs' => ['/tmp'],
-            // deliberately missing 'remote' key
+            'backup_dirs' => [$tempDir],
+            // deliberately missing 'remotes' key
         ];
         $logger = $this->getMockBuilder(LoggerInterface::class)
             ->disableOriginalConstructor()
@@ -90,6 +96,10 @@ class BackupManagerTest extends TestCase
             ->method('sendAlert');
         $backupManager = new BackupManager($config, $logger, $notificationManager);
         $backupManager->run();
+        
+        // Cleanup
+        unlink($tempDir . '/backup.tar.gz');
+        rmdir($tempDir);
     }
 
     /**

@@ -3,7 +3,7 @@
 /**
  * Security Enhancement: Credential Manager
  * Encrypts sensitive configuration data at rest
- * Created as part of GIAI ĐOẠN 2 security improvements
+ * Created as part of Phase 2 security improvements
  */
 
 declare(strict_types=1);

@@ -280,6 +280,7 @@ try {
         }
     }
     
+    // Assign currentFile to final for further processing
     // Gán currentFile vào final để xử lý tiếp
     $final = $currentFile;
     

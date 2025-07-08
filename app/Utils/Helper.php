@@ -1089,7 +1089,7 @@ class Helper
         }
         $level = max(1, min(9, $level));
         $cmd = [
-            '7z', 'a', '-t7z', 
+            '7z', 'a', '-t7z', '-mmt1',
             "-mx=$level",
             "-p$password",
             '-mhe=on',

@@ -91,23 +91,22 @@ cd ..
 For safe and convenient updates to the latest version:
 
 ```bash
-# Interactive update (recommended)
 ./auto_update.sh
-
-# Automatic update without confirmation
-./auto_update.sh --force
-
-# Update from specific branch
-./auto_update.sh --branch=develop
 ```
 
-The auto-update script provides:
+**Note:**
 
-- ✅ **Automatic backup** before update
-- ✅ **Configuration preservation** (keeps your .env, configs, logs)
-- ✅ **Integrity verification** of downloaded files
-- ✅ **Automatic rollback** on failure
-- ✅ **Safe update process** with comprehensive error handling
+- The script will automatically detect the default branch (`main` or `master`) from the remote repository.
+
+- If the current directory is a Git repository, it will fetch and **hard reset** to match the remote branch (all local changes will be overwritten).
+
+- If the current directory is not a Git repository, it will clone the correct branch and copy files into the current directory.
+
+- Your configuration files and logs will be preserved.
+
+- Requires `git` to be installed.
+
+> ⚠️ **Warning:** This script will overwrite any local changes in the repository directory. Make sure to back up your work if needed.
 
 See [UPDATE_GUIDE.md](UPDATE_GUIDE.md) for detailed instructions.
 
