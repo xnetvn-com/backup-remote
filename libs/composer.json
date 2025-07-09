@@ -1,7 +1,23 @@
 {
     "name": "xnetvn-com/php-backup-remote",
     "description": "HestiaCP Remote Backup Tool: encrypted, compressed backups to S3/Backblaze/FTP with rotation and notifications.",
+    "version": "2.1.0",
     "type": "project",
+    "keywords": ["backup", "hestiacp", "s3", "encryption", "compression", "ftp", "backblaze"],
+    "homepage": "https://github.com/xnetvn-com/php-backup-remote",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "xNetVN Inc.",
+            "email": "license@xnetvn.net",
+            "homepage": "https://xnetvn.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/xnetvn-com/php-backup-remote/issues",
+        "source": "https://github.com/xnetvn-com/php-backup-remote",
+        "docs": "https://github.com/xnetvn-com/php-backup-remote/wiki"
+    },
     "require": {
         "php": ">=8.2",
         "league/flysystem": "^3.0",
@@ -24,5 +40,22 @@
         "phpunit/phpunit": "^10.0",
         "vimeo/psalm": "^5.20",
         "phpstan/phpstan": "^1.10"
-    }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage",
+        "psalm": "psalm",
+        "phpstan": "phpstan analyse",
+        "check": [
+            "@psalm",
+            "@phpstan",
+            "@test"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

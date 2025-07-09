@@ -97,6 +97,7 @@ try {
     // 3. Execute Backup
     $logger->info("Starting backup process...");
     $backupManager = new BackupManager($config, $logger, $notificationManager);
+    $GLOBALS['backupManager'] = $backupManager; // Make it globally accessible for ArchiveHandler
     $backupManager->run($isDryRun, $isForce);
 
     $logger->info("Backup process completed successfully.");

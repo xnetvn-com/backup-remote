@@ -50,7 +50,7 @@ class RotationManager
     public function run(bool $isDryRun): void
     {
         // Use direct keep_latest setting for retention
-        $keepCount = (int) ($this->config['rotation']['keep_latest'] ?? 7);
+        $keepCount = (int) ($this->config['rotation']['keep_latest'] ?? 5);
         $remotePath = $this->config['remote']['path'] ?? '';
 
         $this->logger->info("Starting backup rotation process" . ($isDryRun ? " [DRY-RUN MODE]" : ""));
@@ -64,10 +64,24 @@ class RotationManager
         $startTime = microtime(true);
         
         try {
-            $files = $this->storage->listContents($remotePath, true)
+            $fileObjects = $this->storage->listContents($remotePath, true)
                 ->filter(fn (StorageAttributes $attributes) => $attributes->isFile())
                 ->sortByPath()
                 ->toArray();
+            
+            // Convert StorageAttributes objects to arrays for compatibility
+            $files = [];
+            foreach ($fileObjects as $fileObj) {
+                $fileSize = null;
+                if ($fileObj instanceof \League\Flysystem\FileAttributes) {
+                    $fileSize = $fileObj->fileSize();
+                }
+                $files[] = [
+                    'path' => $fileObj->path(),
+                    'lastModified' => $fileObj->lastModified() ?? 0,
+                    'fileSize' => $fileSize,
+                ];
+            }
         } catch (\Throwable $e) {
             $this->logger->error("Failed to list remote files: " . $e->getMessage());
             throw $e;

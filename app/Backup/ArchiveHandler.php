@@ -38,7 +38,7 @@ class ArchiveHandler
      * @return string|array|null The path(s) to the created archive(s), or null on failure/dry-run.
      * @throws \Exception
      */
-    public function create(string $username, string $userPath, bool $isDryRun, ?array $remoteStorages = null): string|array|null
+    public function create(string $username, string $userPath, bool $isDryRun, ?array $remoteStorages = null, bool $isUploadFileByFile = false): string|array|null
     {
         // log entry into archive creation
         $this->logger->info('ArchiveHandler.create called', [
@@ -156,7 +156,15 @@ class ArchiveHandler
                      $ok = Helper::sevenZipCompressEncryptFile($tmpFile, $finalPath, $password, $compressionLevel ?? 5);
                      if ($ok) {
                          $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using 7z");
-                         $processedFiles[] = $finalPath;
+                         
+                         if($isUploadFileByFile) {
+                            $GLOBALS['backupManager']->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
+                         }
+
+                         if(file_exists($finalPath) && is_file($finalPath) && filesize($finalPath) > 0) {
+                             $processedFiles[] = $finalPath;
+                         }
+                         
                      } else {
                          $this->logger->error("Failed to compress and encrypt {$tmpFile} with 7z");
                      }
@@ -168,7 +176,16 @@ class ArchiveHandler
                      $ok = Helper::zipCompressEncryptFile($tmpFile, $finalPath, $password, $compressionLevel ?? 6);
                      if ($ok) {
                          $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using zip");
-                         $processedFiles[] = $finalPath;
+
+                         if($isUploadFileByFile) {
+                            $GLOBALS['backupManager']->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
+                         }
+
+                         if(file_exists($finalPath) && is_file($finalPath) && filesize($finalPath) > 0) {
+                             $processedFiles[] = $finalPath;
+                         }
+                         
+                         //$processedFiles[] = $finalPath;
                      } else {
                          $this->logger->error("Failed to compress and encrypt {$tmpFile} with zip");
                      }
@@ -248,13 +265,22 @@ class ArchiveHandler
                         }
                     }
 
-                    $processedFiles[] = $encryptedFile;
+                    //$processedFiles[] = $encryptedFile;
+
+                    if($isUploadFileByFile) {
+                    $GLOBALS['backupManager']->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
+                    }
+
+                    if(file_exists($finalPath) && is_file($finalPath) && filesize($finalPath) > 0) {
+                        $processedFiles[] = $finalPath;
+                    }
+                    
                 }
                 
                 // Cleanup temporary file
                 try {
                     \App\Utils\Helper::assertInTmpDir($tmpFile);
-                    unlink($tmpFile);
+                    @unlink($tmpFile);
                 } catch (\RuntimeException $e) {
                     $this->logger->warning("Skipping cleanup of non-temp file: {$tmpFile}");
                 }

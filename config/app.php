@@ -182,4 +182,6 @@ return [
             'keep_latest' => (int) Helper::env('ROTATION_KEEP_LATEST', 7),
         ],
     ],
+    // Upload each archive file immediately after creation instead of batching
+    'upload_file_by_file' => (bool) Helper::env('BACKUP_UPLOAD_FILE_BY_FILE', false),
 ];
