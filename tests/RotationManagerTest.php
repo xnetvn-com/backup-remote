@@ -14,7 +14,7 @@ use Psr\Log\LoggerInterface;
 use League\Flysystem\Filesystem;
 
 /**
- * @covers AppBackupRotationManager
+ * @covers App\Backup\RotationManager
  */
 class RotationManagerTest extends TestCase
 {
@@ -63,9 +63,6 @@ class RotationManagerTest extends TestCase
 
         $manager = new RotationManager($config, $logger, $storage);
         $manager->run(true); // Use dry-run mode to avoid path validation issues
-
-        // Debug: Print what was actually deleted
-        error_log('Deleted files: ' . print_r($deleted, true));
         
         // Debug: Check if we get any groups at all
         $reflection = new \ReflectionClass($manager);
@@ -82,7 +79,6 @@ class RotationManagerTest extends TestCase
             ];
         }
         $groups = $groupMethod->invoke($manager, $testFiles);
-        error_log('Groups: ' . print_r($groups, true));
         
         // Since we're in dry-run mode, we can't test actual deletion
         // Instead, let's test the grouping and policy logic directly

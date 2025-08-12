@@ -21,7 +21,7 @@ use App\Exceptions\ValidationException;
 use App\Exceptions\StorageException;
 
 /**
- * @covers AppUtilsHelper
+ * @covers App\Utils\Helper
  */
 class SecurityFixesTest extends TestCase
 {

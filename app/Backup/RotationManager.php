@@ -35,7 +35,9 @@ class RotationManager
         $this->storage = $storage;
         // log initialization of RotationManager
         $this->logger->debug('RotationManager initialized', [
-            'keep_latest' => $this->config['rotation']['keep_latest'] ?? null,
+            'keep_latest' => $this->config['rotation']['policies']['keep_latest']
+                ?? $this->config['rotation']['keep_latest']
+                ?? null,
             'remote_path' => $this->config['remote']['path'] ?? null,
             'storageClass' => get_class($storage),
         ]);
@@ -49,8 +51,16 @@ class RotationManager
 
     public function run(bool $isDryRun): void
     {
-        // Use direct keep_latest setting for retention
-        $keepCount = (int) ($this->config['rotation']['keep_latest'] ?? 5);
+        // Resolve keep_latest from config, supporting both new and legacy keys
+        $keepCount = (int) (
+            $this->config['rotation']['policies']['keep_latest']
+            ?? $this->config['rotation']['keep_latest']
+            ?? 7
+        );
+        // Safety: never allow zero or negative which could wipe all backups unintentionally
+        if ($keepCount < 1) {
+            $keepCount = 1;
+        }
         $remotePath = $this->config['remote']['path'] ?? '';
 
         $this->logger->info("Starting backup rotation process" . ($isDryRun ? " [DRY-RUN MODE]" : ""));
@@ -186,17 +196,14 @@ class RotationManager
                 $fileSize = $fileToDelete['fileSize'] ?? 0;
                 $totalSizeToDelete += $fileSize;
                 $fileSizeStr = $fileSize > 0 ? number_format($fileSize) . ' bytes' : 'unknown size';
-                
+
                 $this->logger->info("Marked for deletion: {$path} ({$fileSizeStr})");
                 if (!$isDryRun) {
-                    // Ensure only temp remote paths are deleted
                     try {
-                        \App\Utils\Helper::assertInTmpDir($path);
                         $this->storage->delete($path);
-                    } catch (\RuntimeException $e) {
-                        $this->logger->warning("Skipping deletion of non-temp path: {$path}");
+                        $this->logger->debug("Deleted old backup: {$path}");
                     } catch (\Throwable $e) {
-                        $this->logger->warning("Failed to delete file on remote: {$path}");
+                        $this->logger->warning("Failed to delete file on remote: {$path} - " . $e->getMessage());
                     }
                 } else {
                     $this->logger->info("[DRY-RUN] Would delete: {$fileToDelete['path']}");

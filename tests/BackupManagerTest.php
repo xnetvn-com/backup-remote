@@ -17,9 +17,6 @@ use App\Notification\NotificationManager;
  * Test class for BackupManager functionality.
  * @covers App\Backup\BackupManager
  */
-/**
- * @covers AppBackupBackupManager
- */
 class BackupManagerTest extends TestCase
 {
     /**
@@ -133,5 +130,4 @@ class BackupManagerTest extends TestCase
         $this->assertFileDoesNotExist($file2);
         @rmdir($tmpDir);
     }
-    // TODO: Add more tests for run(), error handling, etc.
 }

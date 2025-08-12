@@ -10,7 +10,7 @@ use App\System\SystemChecker;
 use Psr\Log\LoggerInterface;
 
 /**
- * @covers AppSystemSystemChecker
+ * @covers App\System\SystemChecker
  */
 class SystemCheckerTest extends TestCase
 {

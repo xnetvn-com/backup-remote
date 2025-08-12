@@ -62,7 +62,7 @@ class BackupManager
             $lastSuccessTime = $this->checkLastSuccessfulBackup();
             if($lastSuccessTime) {
                 $this->logger->info(sprintf('Last successful backup at %s, within 24h, skipping execution.', $lastSuccessTime));
-                exit();
+                return;
             }
         }
         
@@ -110,7 +110,7 @@ class BackupManager
             return;
         }
 
-        $archiveHandler = new ArchiveHandler($this->config, $this->logger);
+        $archiveHandler = new ArchiveHandler($this->config, $this->logger, $this);
         $storages = [];
         foreach ($this->config['remotes'] as $remoteConfig) {
             if (empty($remoteConfig['driver'])) {

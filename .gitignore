@@ -25,6 +25,8 @@ Thumbs.db
 # Ignore logs and runtime
 storage/logs/
 reports/
+.local/
+docs/
 
 # Ignore vendor (if not committed)
 #/vendor/
@@ -37,8 +39,10 @@ reports/
 .env.production.local
 
 # Ignore PHPUnit result cache and coverage
-.phpunit.cache
+.phpunit.cache/
+.phpunit.result.cache
 coverage/
+coverage-html/
 
 # Ignore temporary files and caches
 tmp/
@@ -68,3 +72,4 @@ libs/composer.lock
 *.csv
 *.dat
 
+*-instructions.md

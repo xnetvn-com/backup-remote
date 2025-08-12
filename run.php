@@ -34,7 +34,12 @@ $isForce = isset($options['f']) || isset($options['force']);
 require_once __DIR__ . '/libs/vendor/autoload.php';
 
 // --- Environment Detection & Loading ---
-$env = getenv('APP_ENV') ?: 'development';
+
+// --- Environment Detection & Loading ---
+$env = getenv('APP_ENV');
+if ($env === false || !is_string($env) || $env === '') {
+    $env = 'development';
+}
 $envFile = ".env.$env";
 if (file_exists(__DIR__ . "/$envFile")) {
     $dotenv = Dotenv::createUnsafeMutable(__DIR__, $envFile);
@@ -55,8 +60,8 @@ if ($isDryRun) {
     $logger->info("Executing in dry-run mode. No files will be created, uploaded, or deleted.");
 }
 
+
 // --- Main Execution ---
-// Use Helper::getTmpDir() to determine the temporary directory
 $tmpDir = App\Utils\Helper::getTmpDir();
 $lockFile = $tmpDir . '/.backup.lock';
 $lockAcquired = false;
@@ -68,7 +73,7 @@ try {
         $isRunning = false;
         if ($pid > 0) {
             // Check if the process is still running (Linux)
-            $isRunning = posix_kill($pid, 0);
+            $isRunning = function_exists('posix_kill') ? posix_kill($pid, 0) : false;
         }
         if ($pid > 0 && $isRunning) {
             $logger->error("Another backup process is already running (PID: $pid). Exiting.");
@@ -78,7 +83,11 @@ try {
             @unlink($lockFile);
         }
     }
-    if (file_put_contents($lockFile, getmypid() ?: "unknown") === false) {
+    $currentPid = getmypid();
+    if ($currentPid === false || !is_int($currentPid)) {
+        $currentPid = "unknown";
+    }
+    if (file_put_contents($lockFile, $currentPid) === false) {
         $logger->error("Failed to create lock file. Exiting.");
         exit(3);
     }
@@ -97,7 +106,6 @@ try {
     // 3. Execute Backup
     $logger->info("Starting backup process...");
     $backupManager = new BackupManager($config, $logger, $notificationManager);
-    $GLOBALS['backupManager'] = $backupManager; // Make it globally accessible for ArchiveHandler
     $backupManager->run($isDryRun, $isForce);
 
     $logger->info("Backup process completed successfully.");
@@ -105,7 +113,7 @@ try {
         $notificationManager->sendSuccess("Backup process completed successfully.");
     }
     exit(0);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $errorMessage = 'An error occurred: ' . $e->getMessage();
     $logger->error($errorMessage, ['exception' => $e]);
     if (!$isDryRun) {
@@ -115,7 +123,7 @@ try {
 } finally {
     // 5. Unlock Process
     if ($lockAcquired && file_exists($lockFile)) {
-        unlink($lockFile);
+        @unlink($lockFile);
     }
     $logger->info("Backup script finished.");
 }

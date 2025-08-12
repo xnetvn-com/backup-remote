@@ -21,11 +21,13 @@ class ArchiveHandler
 {
     private array $config;
     private LoggerInterface $logger;
+    private ?BackupManager $backupManager;
 
-    public function __construct(array $config, LoggerInterface $logger)
+    public function __construct(array $config, LoggerInterface $logger, ?BackupManager $backupManager = null)
     {
         $this->config = $config;
         $this->logger = $logger;
+        $this->backupManager = $backupManager;
     }
 
     /**
@@ -157,8 +159,8 @@ class ArchiveHandler
                      if ($ok) {
                          $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using 7z");
                          
-                         if($isUploadFileByFile) {
-                            $GLOBALS['backupManager']->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
+                         if($isUploadFileByFile && $this->backupManager) {
+                            $this->backupManager->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
                          }
 
                          if(file_exists($finalPath) && is_file($finalPath) && filesize($finalPath) > 0) {
@@ -177,15 +179,14 @@ class ArchiveHandler
                      if ($ok) {
                          $this->logger->info("Compressed and encrypted {$tmpFile} to {$finalPath} using zip");
 
-                         if($isUploadFileByFile) {
-                            $GLOBALS['backupManager']->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
+                         if($isUploadFileByFile && $this->backupManager) {
+                            $this->backupManager->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
                          }
 
                          if(file_exists($finalPath) && is_file($finalPath) && filesize($finalPath) > 0) {
                              $processedFiles[] = $finalPath;
                          }
                          
-                         //$processedFiles[] = $finalPath;
                      } else {
                          $this->logger->error("Failed to compress and encrypt {$tmpFile} with zip");
                      }
@@ -265,10 +266,8 @@ class ArchiveHandler
                         }
                     }
 
-                    //$processedFiles[] = $encryptedFile;
-
-                    if($isUploadFileByFile) {
-                    $GLOBALS['backupManager']->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
+                    if($isUploadFileByFile && $this->backupManager) {
+                    $this->backupManager->uploadBackupAllFilesToAllStorages([$finalPath], $remoteStorages, $isDryRun, []);
                     }
 
                     if(file_exists($finalPath) && is_file($finalPath) && filesize($finalPath) > 0) {
@@ -360,7 +359,7 @@ class ArchiveHandler
                     $exclude
                 );
                 if ($result !== true) {
-                    throw new \Exception("UnifiedArchive failed: " . print_r($result, true));
+                    throw new \Exception("UnifiedArchive failed with result: " . var_export($result, true));
                 }
             }
 

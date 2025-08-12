@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 use App\Utils\Logger;
 
 /**
- * @covers AppUtilsLogger
+ * @covers App\Utils\Logger
  */
 class LoggerTest extends TestCase
 {

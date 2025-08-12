@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 use App\Utils\Helper;
 
 /**
- * @covers AppUtilsHelper
+ * @covers App\Utils\Helper
  */
 class HelperEncrypt7zZipTest extends TestCase
 {
@@ -41,7 +41,8 @@ class HelperEncrypt7zZipTest extends TestCase
             // Decompress with password
             $cmd = ['7z', 'e', '-so', "-p$password", $encFile];
             $out = fopen($decFile, 'wb');
-            $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
+            // Capture stderr to avoid noisy test output
+            $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
             $this->assertTrue(is_resource($proc), '7z proc open failed');
             while (!feof($pipes[1])) {
                 $data = fread($pipes[1], 8192);
@@ -67,7 +68,8 @@ class HelperEncrypt7zZipTest extends TestCase
             // Decompress with password
             $cmd = ['unzip', '-P', $password, '-p', $encFile];
             $out = fopen($decFile, 'wb');
-            $proc = proc_open($cmd, [1 => ['pipe', 'w']], $pipes);
+            // Capture stderr to avoid noisy test output
+            $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
             $this->assertTrue(is_resource($proc), 'zip proc open failed');
             while (!feof($pipes[1])) {
                 $data = fread($pipes[1], 8192);

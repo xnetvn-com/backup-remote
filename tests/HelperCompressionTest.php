@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 use App\Utils\Helper;
 
 /**
- * @covers AppUtilsHelper
+ * @covers App\Utils\Helper
  */
 class HelperCompressionTest extends TestCase
 {

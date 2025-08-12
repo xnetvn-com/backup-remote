@@ -28,15 +28,19 @@ A robust PHP command-line utility to automate the backup of Hestia Control Panel
 
 ## Features
 
-- **Multiple Storage Backends**: Upload encrypted backups to any S3-compatible service (AWS S3, Backblaze B2, DigitalOcean Spaces) or traditional FTP servers via [Flysystem](https://flysystem.thephpleague.com/).
-- **Strong Encryption**: AES-256-CBC encryption (via OpenSSL) or GPG encryption before upload.
-- **Flexible Compression**: Support for gzip, zstd, bzip2, xz, zip, 7z formats.
-- **Smart Rotation**: Retention policies to keep a configured number of daily, weekly, or custom backups and prune old archives automatically.
-- **Dry-Run Mode**: Safe simulation without creating, uploading, or deleting files.
-- **Detailed Logging**: Structured logs with Monolog stored in `storage/logs/app.log`.
-- **Pre-flight Checks**: CPU load, disk space, and time-window checks to prevent resource exhaustion.
-- **Notifications**: Email and Telegram notifications on success or failure.
-- **PSR-12 & Modern PHP**: Written in PHP 8.2+, fully object-oriented, following best practices.
+- **Multiple Storage Backends**: Upload encrypted backups to AWS S3, Backblaze B2, DigitalOcean Spaces, traditional FTP/FTPS servers, or local filesystem via [Flysystem](https://flysystem.thephpleague.com/).
+- **Strong Encryption**: AES-256-CBC encryption (via OpenSSL) or GPG encryption with optional key management.
+- **Flexible Compression**: Support for gzip, zstd, bzip2, xz, zip, 7z formats with configurable compression levels.
+- **Smart Rotation**: Advanced retention policies supporting daily, weekly, monthly, and yearly backup retention with intelligent file grouping.
+- **XBK File Format**: Custom .xbk archive format supporting layered compression and encryption with filename metadata.
+- **Dry-Run Mode**: Safe simulation without creating, uploading, or deleting files for testing configurations.
+- **Structured Logging**: Comprehensive logging with Monolog supporting multiple channels and log levels.
+- **Pre-flight Checks**: CPU load, disk space, time window validation, and dependency verification.
+- **Multi-Channel Notifications**: Email (SMTP), Telegram, Discord, Slack, Microsoft Teams, Google Chat notifications.
+- **Performance Optimized**: Streaming operations for large files, memory-efficient processing, concurrent uploads.
+- **Security Hardened**: Read-only source protection, path traversal prevention, secure credential management.
+- **CLI Tools Integration**: Native support for 7z, zip, gzip, zstd, bzip2, xz CLI tools for optimal performance.
+- **PSR Compliant**: Modern PHP 8.2+ codebase following PSR-4, PSR-12, PSR-3 standards with full type declarations.
 
 ## Requirements
 
@@ -404,7 +408,21 @@ Open `.env` and configure:
 ## Security & Data Integrity
 
 - **Read-Only Guarantee for BACKUP_DIRS**: All files and directories specified in `BACKUP_DIRS` are treated as strictly read-only. The backup system will never modify, delete, move, or overwrite any original file in these directories. All backup, compression, and encryption operations are performed on temporary copies in a dedicated temp directory (`TMP_DIR`). This ensures absolute safety and integrity of your source data.
-- **Automated Tests**: The project includes automated tests to verify that no write, delete, or move operations are ever performed directly in `BACKUP_DIRS`.
+
+- **AES-256-CBC Encryption**: Industry-standard encryption with OpenSSL implementation providing strong data protection at rest and in transit.
+
+- **GPG Encryption Support**: Alternative encryption using GnuPG with public key cryptography for enhanced security scenarios.
+
+- **Path Traversal Protection**: Comprehensive validation to prevent directory traversal attacks and unauthorized file access.
+
+- **Secure Credential Management**: Environment-based credential storage with optional encryption for sensitive configuration values.
+
+- **Automated Security Tests**: The project includes automated tests to verify that no write, delete, or move operations are ever performed directly in `BACKUP_DIRS`.
+
+- **CLI Tool Security**: Secure invocation of external compression and encryption tools with proper argument sanitization.
+
+- **File Permissions**: Proper temporary directory permissions (0700) and secure file handling throughout the backup process.
+
 - **Best Practice**: Always set appropriate file system permissions to enforce read-only access for the backup process user on your backup source directories.
 
 ## Usage
@@ -440,12 +458,12 @@ php download.php --user=<username> --version=<YYYY-MM-DD_HH-MM-SS> [--remote=<dr
 1. **Initialization**: Load `.env` and bootstrap services.
 2. **Locking**: Prevent concurrent runs with a lock file.
 3. **Pre-flight Checks**: CPU, disk space, and time-window validation.
-4. **Archive**: Create compressed archive per user directory.
-5. **Encrypt**: Encrypt archive with AES or GPG.
-6. **Upload**: Stream to configured remote storage.
-7. **Cleanup**: Remove local temporary files and lock.
-8. **Rotation**: List remote files and delete older backups beyond policy.
-9. **Notification**: Send success or failure alerts.
+4. **Archive**: Create compressed archive per user directory using TAR with configurable compression.
+5. **Encrypt**: Encrypt archive with AES-256-CBC or GPG using OpenSSL/CLI tools.
+6. **Upload**: Stream to configured remote storage backends (S3/B2/FTP/Local).
+7. **Cleanup**: Remove local temporary files and release lock.
+8. **Rotation**: List remote files and delete older backups beyond retention policy.
+9. **Notification**: Send success or failure alerts via multiple channels.
 
 ## Testing
 
@@ -453,6 +471,26 @@ Run PHPUnit unit tests:
 
 ```bash
 ./libs/vendor/bin/phpunit --configuration=phpunit.xml
+```
+
+### Test Coverage
+
+The project includes comprehensive test coverage:
+
+- **Unit Tests**: Core functionality, encryption, compression, storage operations
+- **Integration Tests**: Component interaction, backup workflows, storage backends  
+- **Edge Case Tests**: Large files, special characters, error conditions
+- **Security Tests**: Encryption strength, credential management, path validation
+- **Performance Tests**: Memory usage, streaming operations, concurrent access
+
+For test coverage report generation:
+
+```bash
+# Install Xdebug (if not already installed)
+sudo apt install php8.2-xdebug
+
+# Generate coverage report
+./libs/vendor/bin/phpunit --coverage-html coverage/
 ```
 
 ## Contributing

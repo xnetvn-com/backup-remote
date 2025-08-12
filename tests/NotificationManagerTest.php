@@ -10,7 +10,7 @@ use App\Notification\NotificationManager;
 use Psr\Log\LoggerInterface;
 
 /**
- * @covers AppNotificationNotificationManager
+ * @covers App\Notification\NotificationManager
  */
 class NotificationManagerTest extends TestCase
 {

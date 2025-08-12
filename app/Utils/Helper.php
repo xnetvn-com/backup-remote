@@ -156,8 +156,6 @@ class Helper
                     'bucket' => $_ENV['AWS_BUCKET'],
                     'endpoint' => $_ENV['AWS_ENDPOINT'] ?? null,
                 ];
-            } else {
-                error_log('[BackupRemote] Warning: AWS S3 remote detected but missing region. Skipping S3 remote.');
             }
         }
         // Legacy S3_* variables support
@@ -172,8 +170,6 @@ class Helper
                     'bucket' => $_ENV['S3_BUCKET'],
                     'endpoint' => $_ENV['S3_ENDPOINT'] ?? null,
                 ];
-            } else {
-                error_log('[BackupRemote] Warning: S3 remote detected but missing region. Skipping S3 remote.');
             }
         }
         if (!empty($_ENV['B2_KEY']) && !empty($_ENV['B2_SECRET']) && !empty($_ENV['B2_BUCKET'])) {
@@ -320,7 +316,8 @@ class Helper
         $testFile = self::getTmpDir() . '/test_largefile_' . uniqid() . '.bin';
         $encFile = $testFile . '.xenc';
         $decFile = $testFile . '.dec';
-        $password = 'TestPassword123!';
+    // Use test password from environment to avoid hardcoding secrets
+    $password = self::env('ENCRYPTION_PASSWORD', self::env('BACKUP_PASSWORD', 'test-password-123'));
         $size = 50 * 1024 * 1024; // 50MB for test (adjustable)
         // Create random file
         $fp = fopen($testFile, 'wb');

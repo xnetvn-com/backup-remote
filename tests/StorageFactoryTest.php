@@ -19,7 +19,7 @@ use PHPUnit\Framework\TestCase;
 use App\Storage\StorageFactory;
 
 /**
- * @covers AppStorageStorageFactory
+ * @covers App\Storage\StorageFactory
  */
 class StorageFactoryTest extends TestCase
 {
